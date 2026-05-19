@@ -1,0 +1,13 @@
+{
+  "verify_mode": "soft",
+  "steps": [
+    {"verify": "davinci.db_snapshot", "as": "baseline"},
+    {"action": "wait", "ms": 300},
+    {
+      "verify": "davinci.timeline_clips",
+      "limit": 20,
+      "min_clips": 0
+    }
+  ],
+  "return": {"success": true}
+}
