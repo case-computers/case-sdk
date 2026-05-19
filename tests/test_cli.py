@@ -127,7 +127,53 @@ def test_run_local_file_uses_local_driver(isolated_home, capsys, tmp_path):
 def test_run_remote_requires_api_key(isolated_home, capsys):
     code = cli.main(["run", "some_procedure"])
     assert code == 2
-    assert "requires --key" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "no API key" in err or "requires --key" in err
+
+
+def test_procedures_lists_builtin(capsys):
+    code = cli.main(["procedures", "--json"])
+    assert code == 0
+    out = json.loads(capsys.readouterr().out)
+    names = {p["name"] for p in out["procedures"]}
+    assert "davinci/append_to_timeline" in names
+
+
+def test_run_by_procedure_name(isolated_home, capsys, tmp_path):
+    from case_sdk.harness.executor import Harness
+
+    fake = Harness()
+
+    @fake.register_action("activate_app")
+    def activate_app(**_):
+        return {}
+
+    with patch("case_sdk.cli.Runtime") as Rt, patch("case_sdk.cli.ensure_perms"):
+        inst = Rt.return_value
+        inst.execute_file.return_value = {"success": True, "via": "name"}
+        code = cli.main(
+            ["run", "davinci/focus_resolve", "--skip-perm-check"],
+        )
+    assert code == 0
+    inst.execute_file.assert_called_once()
+    assert inst.execute_file.call_args[0][0] == "davinci/focus_resolve"
+
+
+def test_verify_list_prints_json(capsys):
+    code = cli.main(["verify-list"])
+    assert code == 0
+    out = json.loads(capsys.readouterr().out)
+    assert "davinci.db_snapshot" in out["verifiers"]
+
+
+def test_ax_tree_prints_json(isolated_home, capsys):
+    with patch("case_sdk.cli.app_tree", return_value={"app": "X", "tree": {}}), patch(
+        "case_sdk.cli.ensure_perms"
+    ):
+        code = cli.main(["ax-tree", "--frontmost", "--skip-perm-check"])
+    assert code == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["app"] == "X"
 
 
 def test_run_invalid_param_format(isolated_home, capsys, tmp_path):

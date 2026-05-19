@@ -70,14 +70,109 @@ In remote mode the server holds the procedure. The runtime receives one action a
 
 ## Built-in primitives
 
-Actions: `open_app`, `click`, `type`, `hotkey`, `scroll`, `mouse_down`, `mouse_up`, `wait`, `ax_press`, `ax_set_value`.
+Actions: `open_app`, `click`, `type`, `hotkey`, `scroll`, `mouse_down`, `mouse_up`, `wait`, `ax_press`, `ax_set_value`, `fn_key`, `drag`.
 
 Sensors: `window_title`, `ax_value`, `screenshot`.
+
+## Inspect the AX tree (authoring)
+
+Discover UI elements before writing `ax_press` / `ax_set_value` steps:
+
+```bash
+case-sdk ax-tree --frontmost
+case-sdk ax-tree "DaVinci Resolve" --depth 10
+case-sdk ax-tree "DaVinci Resolve" --find --role AXButton --title-contains Append
+```
+
+Python API:
+
+```python
+from case_sdk import app_tree, find_elements
+
+tree = app_tree("TextEdit", max_depth=8)
+refs = find_elements("DaVinci Resolve", role="AXButton", title_contains="Save")
+```
+
+Each node includes `role`, `title`, and optional `path` (child indices). Use those fields in `element_ref` when yielding AX actions.
+
+## Verification (Project.db and more)
+
+After GUI actions, confirm state with **verify** steps in JSON procedures (or call from Python):
+
+```json
+{
+  "verify_mode": "soft",
+  "steps": [
+    {"verify": "davinci.db_snapshot", "as": "before"},
+    {"action": "wait", "ms": 500},
+    {"verify": "davinci.db_delta", "field": "timeline_video", "baseline": "before", "min_delta": 1}
+  ]
+}
+```
+
+- **`soft`** (default) — log a warning and continue (good for demos; unsaved Resolve projects).
+- **`hard`** — raise `ClientError` with code `E_VERIFY` (set `"verify_mode": "hard"` or `CASE_SDK_VERIFY_MODE=hard`).
+
+Built-in verifiers:
+
+| Name | Purpose |
+|------|---------|
+| `davinci.db_snapshot` | Store row-count baseline (`as` optional) |
+| `davinci.db_delta` | Poll until a field grows (or `max_delta` for deletes) |
+| `davinci.media_pool_name` | Clip name appears in media pool |
+| `davinci.timeline_clips` | Read timeline items (`min_clips` optional) |
+
+```bash
+case-sdk verify-list
+```
+
+## Procedure discovery (Phase 0)
+
+Built-in DaVinci procedures ship with the package. Override or add your own under
+``~/.case/procedures/`` (created by ``case-sdk init``).
+
+```bash
+case-sdk procedures
+case-sdk run davinci/import_and_append --param filepath=/path/to/clip.mov
+case-sdk run davinci/append_to_timeline
+```
+
+Search path (first match wins): ``$CASE_SDK_PROCEDURES_PATH`` → ``~/.case/procedures`` → ``~/.case-sdk/procedures`` → built-ins.
+
+| Built-in name | Purpose |
+|---------------|---------|
+| `davinci/focus_resolve` | Activate DaVinci |
+| `davinci/import_media` | Import one file (`filepath`, auto `clip_basename`) |
+| `davinci/append_to_timeline` | Append selected pool clip (menu click + DB verify) |
+| `davinci/append_to_timeline_hotkey` | Append via Fn+F9 fallback |
+| `davinci/import_and_append` | Import then append |
+
+## JSON step lists (no Python required)
+
+Write a `.json` procedure and run it like a `.py` file:
+
+```json
+{
+  "steps": [
+    {"action": "open_app", "name": "TextEdit"},
+    {"action": "wait", "ms": 500},
+    {"action": "type", "text": "hello ${name}"}
+  ],
+  "return": {"success": true}
+}
+```
+
+```bash
+case-sdk run examples/open_textedit.json --param name=world
+```
 
 ## CLI
 
 ```
 case-sdk run <path-or-name> [--key sk_xxx] [--api wss://...] [--param k=v]...
+case-sdk ax-tree [app] [--frontmost] [--find] [--role ...] [--title-contains ...]
+case-sdk procedures [--json]
+case-sdk verify-list
 case-sdk init [--key sk_xxx] [--api wss://...] [--force]
 case-sdk doctor
 case-sdk --version

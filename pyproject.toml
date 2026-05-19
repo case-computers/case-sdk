@@ -52,3 +52,6 @@ case-sdk = "case_sdk.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["case_sdk"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"case_sdk/builtin_procedures" = "case_sdk/builtin_procedures"
