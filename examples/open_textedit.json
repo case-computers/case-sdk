@@ -1,0 +1,9 @@
+{
+  "steps": [
+    {"action": "open_app", "name": "TextEdit"},
+    {"action": "wait", "ms": 800},
+    {"action": "type", "text": "hello from case-sdk steps"},
+    {"sensor": "window_title"}
+  ],
+  "return": {"success": true}
+}
