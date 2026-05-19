@@ -1,0 +1,21 @@
+{
+  "description": "Append the selected Media Pool clip to the end of the timeline (Edit > Append to End of Timeline).",
+  "verify_mode": "soft",
+  "steps": [
+    {"action": "activate_app", "name": "DaVinci Resolve", "settle_ms": 700},
+    {"verify": "davinci.db_snapshot", "as": "before"},
+    {
+      "action": "menu_click",
+      "script": "tell application \"System Events\"\ntell process \"DaVinci Resolve\"\nclick menu item \"Append to End of Timeline\" of menu \"Edit\" of menu bar 1\nend tell\nend tell"
+    },
+    {"action": "wait", "ms": 600},
+    {
+      "verify": "davinci.db_delta",
+      "field": "timeline_video",
+      "baseline": "before",
+      "min_delta": 1,
+      "timeout": 5
+    }
+  ],
+  "return": {"success": true}
+}

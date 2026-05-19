@@ -1,0 +1,18 @@
+{
+  "description": "Append via Fn+F9 when menu clicks fail (function-row / focus issues). Pool clip must already be selected.",
+  "verify_mode": "soft",
+  "steps": [
+    {"action": "activate_app", "name": "DaVinci Resolve", "settle_ms": 700},
+    {"verify": "davinci.db_snapshot", "as": "before"},
+    {"action": "fn_key", "key": "f9"},
+    {"action": "wait", "ms": 600},
+    {
+      "verify": "davinci.db_delta",
+      "field": "timeline_video",
+      "baseline": "before",
+      "min_delta": 1,
+      "timeout": 5
+    }
+  ],
+  "return": {"success": true}
+}

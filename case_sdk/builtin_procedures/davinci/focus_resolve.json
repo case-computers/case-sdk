@@ -1,0 +1,7 @@
+{
+  "description": "Bring DaVinci Resolve frontmost before other steps.",
+  "steps": [
+    {"action": "activate_app", "name": "DaVinci Resolve", "settle_ms": 700}
+  ],
+  "return": {"success": true}
+}

@@ -1,0 +1,40 @@
+{
+  "description": "Import one file then append it to the timeline. Requires an open timeline on the Edit page.",
+  "verify_mode": "soft",
+  "steps": [
+    {"action": "activate_app", "name": "DaVinci Resolve", "settle_ms": 700},
+    {"verify": "davinci.db_snapshot", "as": "pool_before"},
+    {
+      "action": "menu_click",
+      "script": "tell application \"System Events\"\ntell process \"DaVinci Resolve\"\nclick menu item \"Media…\" of menu \"Import\" of menu item \"Import\" of menu \"File\" of menu bar 1\nend tell\nend tell"
+    },
+    {"action": "wait", "ms": 2000},
+    {"action": "hotkey", "combo": ["cmd", "shift", "g"]},
+    {"action": "wait", "ms": 1200},
+    {"action": "type", "text": "${filepath}", "interval": 0.01},
+    {"action": "wait", "ms": 300},
+    {"action": "hotkey", "combo": ["enter"]},
+    {"action": "wait", "ms": 1200},
+    {"action": "hotkey", "combo": ["enter"]},
+    {"action": "wait", "ms": 2000},
+    {
+      "verify": "davinci.media_pool_name",
+      "name": "${clip_basename}",
+      "timeout": 6
+    },
+    {"verify": "davinci.db_snapshot", "as": "timeline_before"},
+    {
+      "action": "menu_click",
+      "script": "tell application \"System Events\"\ntell process \"DaVinci Resolve\"\nclick menu item \"Append to End of Timeline\" of menu \"Edit\" of menu bar 1\nend tell\nend tell"
+    },
+    {"action": "wait", "ms": 600},
+    {
+      "verify": "davinci.db_delta",
+      "field": "timeline_video",
+      "baseline": "timeline_before",
+      "min_delta": 1,
+      "timeout": 5
+    }
+  ],
+  "return": {"success": true, "filepath": "${filepath}"}
+}
