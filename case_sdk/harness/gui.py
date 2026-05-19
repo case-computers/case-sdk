@@ -52,6 +52,15 @@ def _clamp_coords(x: int, y: int) -> tuple[int, int]:
     return cx, cy
 
 
+# macOS virtual keycodes for function keys (Carbon HIToolbox). Used by the
+# ``fn_key`` action because pyautogui has no way to represent the Fn modifier.
+_FN_KEYCODES: dict[str, int] = {
+    "f1": 0x7A, "f2": 0x78, "f3": 0x63, "f4": 0x76, "f5": 0x60, "f6": 0x61,
+    "f7": 0x62, "f8": 0x64, "f9": 0x65, "f10": 0x6D, "f11": 0x67, "f12": 0x6F,
+    "f13": 0x69, "f14": 0x6B, "f15": 0x71,
+}
+
+
 # ---- Harness builder -----------------------------------------------------
 
 
@@ -70,6 +79,42 @@ def build_default_harness() -> Harness:
     def open_app(name: str) -> dict[str, Any]:
         subprocess.run(["open", "-a", name], check=True)
         return {}
+
+    @h.register_action("activate_app")
+    def activate_app(name: str, settle_ms: int = 700) -> dict[str, Any]:
+        """Bring an already-running app forward (osascript ``activate``)."""
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                f'tell application "{name}" to activate',
+            ],
+            check=False,
+            capture_output=True,
+        )
+        time.sleep(max(0, int(settle_ms)) / 1000.0)
+        return {"name": name, "settle_ms": int(settle_ms)}
+
+    @h.register_action("menu_click")
+    def menu_click(script: str, timeout: float = 5.0) -> dict[str, Any]:
+        """Run an AppleScript snippet that clicks a menu item via System Events.
+
+        Prefer this over hotkeys when macOS swallows function keys or focus is
+        unreliable. The script should target ``process "App Name"`` menus.
+        """
+        try:
+            subprocess.run(
+                ["osascript", "-e", script],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=max(0.5, float(timeout)),
+            )
+            return {"ok": True}
+        except subprocess.CalledProcessError as e:
+            return {"ok": False, "reason": (e.stderr or "").strip() or str(e)}
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "reason": "osascript timed out"}
 
     @h.register_action("click")
     def click(
@@ -166,6 +211,56 @@ def build_default_harness() -> Harness:
         except Exception as exc:
             return {"ok": False, "reason": f"set_value_failed: {exc}"}
 
+    @h.register_action("fn_key")
+    def fn_key(key: str) -> dict[str, Any]:
+        """Press a function key with the macOS Fn modifier held (Quartz CGEvent)."""
+        keycode = _FN_KEYCODES.get(key.lower())
+        if keycode is None:
+            raise ValueError(
+                f"fn_key: unknown key {key!r}; expected one of "
+                f"{sorted(_FN_KEYCODES)}"
+            )
+        try:
+            from Quartz import (
+                CGEventCreateKeyboardEvent,
+                CGEventPost,
+                CGEventSetFlags,
+                kCGEventFlagMaskSecondaryFn,
+                kCGHIDEventTap,
+            )
+        except Exception as exc:  # pragma: no cover — macOS-only path
+            raise RuntimeError(
+                "fn_key requires pyobjc-framework-Quartz on macOS"
+            ) from exc
+        down = CGEventCreateKeyboardEvent(None, keycode, True)
+        CGEventSetFlags(down, kCGEventFlagMaskSecondaryFn)
+        CGEventPost(kCGHIDEventTap, down)
+        time.sleep(0.02)
+        up = CGEventCreateKeyboardEvent(None, keycode, False)
+        CGEventSetFlags(up, kCGEventFlagMaskSecondaryFn)
+        CGEventPost(kCGHIDEventTap, up)
+        return {"key": key, "fn": True}
+
+    @h.register_action("drag")
+    def drag(
+        start_x: int,
+        start_y: int,
+        end_x: int,
+        end_y: int,
+        duration_ms: int = 500,
+        button: str = "left",
+    ) -> dict[str, Any]:
+        cx1, cy1 = _clamp_coords(start_x, start_y)
+        cx2, cy2 = _clamp_coords(end_x, end_y)
+        duration_s = max(0, int(duration_ms)) / 1000.0
+        pyautogui.moveTo(cx1, cy1, duration=0.0)
+        pyautogui.dragTo(cx2, cy2, duration=duration_s, button=button)
+        return {
+            "start": [cx1, cy1],
+            "end": [cx2, cy2],
+            "duration_ms": int(duration_ms),
+        }
+
     # ---- sensors ----------------------------------------------------------
     # Wired here (not in a separate call) so consumers get one harness with
     # everything registered. Implementations live in ``sensors.py``.
@@ -180,69 +275,7 @@ def build_default_harness() -> Harness:
 
 
 def _resolve_ax_element(element_ref: Any):
-    """Best-effort resolution of an ``element_ref`` to an atomacos element.
+    """Resolve ``element_ref`` via :mod:`case_sdk.inspect`."""
+    from case_sdk.inspect import resolve_element_ref
 
-    Accepts a dict like ``{"role": "AXButton", "title": "Save"}``. Returns the
-    first match in the frontmost app's AX tree, or ``None`` if nothing matches
-    or AX is unavailable. Designed so callers can use the truthiness of the
-    return value as the success signal.
-    """
-    if not isinstance(element_ref, dict):
-        return None
-    role = element_ref.get("role")
-    title = element_ref.get("title")
-    value = element_ref.get("value")
-    if not (role or title or value):
-        return None
-    try:
-        import atomacos  # noqa: WPS433 — lazy to keep import cheap in tests
-    except Exception:
-        return None
-    try:
-        app = atomacos.getFrontmostApp()
-    except Exception:
-        return None
-    return _walk_for_match(app, role=role, title=title, value=value, depth=0)
-
-
-def _walk_for_match(elem, *, role, title, value, depth: int):
-    if depth > 15:
-        return None
-    try:
-        elem_role = getattr(elem, "AXRole", None)
-    except Exception:
-        elem_role = None
-    if _ax_matches(elem_role, elem, role=role, title=title, value=value):
-        return elem
-    try:
-        children = elem.AXChildren or []
-    except Exception:
-        children = []
-    for child in children:
-        match = _walk_for_match(
-            child, role=role, title=title, value=value, depth=depth + 1
-        )
-        if match is not None:
-            return match
-    return None
-
-
-def _ax_matches(elem_role, elem, *, role, title, value) -> bool:
-    if role and elem_role != role:
-        return False
-    if title is not None:
-        try:
-            elem_title = getattr(elem, "AXTitle", None)
-        except Exception:
-            elem_title = None
-        if elem_title != title:
-            return False
-    if value is not None:
-        try:
-            elem_value = getattr(elem, "AXValue", None)
-        except Exception:
-            elem_value = None
-        if elem_value != value:
-            return False
-    # At least one of role/title/value must be non-None for a real match.
-    return any(x is not None for x in (role, title, value))
+    return resolve_element_ref(element_ref)

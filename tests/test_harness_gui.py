@@ -40,6 +40,7 @@ def test_default_harness_registers_expected_actions():
     actions = set(h.known_actions())
     assert {
         "open_app",
+        "activate_app",
         "click",
         "type",
         "hotkey",
@@ -49,6 +50,9 @@ def test_default_harness_registers_expected_actions():
         "wait",
         "ax_press",
         "ax_set_value",
+        "fn_key",
+        "drag",
+        "menu_click",
     }.issubset(actions)
 
 
