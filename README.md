@@ -15,6 +15,7 @@ From source (until the package is on PyPI):
 git clone https://github.com/EmulatedHumanoid/case-sdk
 cd case-sdk
 pip install -e .
+pip install -e ".[mcp]"    # optional: MCP server for Claude Code / agents
 ```
 
 Grant Accessibility in *System Settings → Privacy & Security → Accessibility*. Then run `case-sdk doctor` to verify.
@@ -179,6 +180,35 @@ case-sdk --version
 ```
 
 Configuration resolves in order: CLI flag → environment (`CASE_SDK_API_KEY`, `CASE_SDK_API_BASE`) → `~/.case-sdk/config.toml`.
+
+## MCP (agents — Claude Code, etc.)
+
+The **case-mcp** server exposes the full local SDK over MCP stdio. It does not duplicate
+automation logic — every tool delegates to `case_sdk` (same as the CLI).
+
+```bash
+pip install -e ".[mcp]"
+case-sdk doctor
+
+# Claude Code (use your venv python path)
+claude mcp add case-sdk -- python -m case_mcp.server
+```
+
+| MCP tool | Purpose |
+|----------|---------|
+| `case_help` | Planner guide + tool catalog |
+| `case_doctor` | Permissions and procedure dirs |
+| `case_focus_app` | Activate an app before keystrokes |
+| `case_ax_tree` | Dump AX hierarchy |
+| `case_find_elements` | Search → `element_ref` dicts |
+| `case_list_procedures` | Built-in + user procedure names |
+| `case_list_verifiers` | JSON verify step names |
+| `case_run` | Run a procedure (`params` dict, optional `verify_mode`) |
+
+Example agent flow: `case_list_procedures` → `case_focus_app("DaVinci Resolve")` →
+`case_run("davinci/import_and_append", {"filepath": "/abs/path/clip.mov"})`.
+
+Remote streaming procedures (case-api) remain CLI-only for now (`case-sdk run` with `--key`).
 
 ## Error handling
 

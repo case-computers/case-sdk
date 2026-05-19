@@ -40,18 +40,23 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mcp = [
+    "mcp[cli]>=1.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "fastapi>=0.110",
     "uvicorn>=0.27",
+    "mcp[cli]>=1.0",
 ]
 
 [project.scripts]
 case-sdk = "case_sdk.cli:main"
+case-mcp = "case_mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["case_sdk"]
+packages = ["case_sdk", "case_mcp"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "case_sdk/builtin_procedures" = "case_sdk/builtin_procedures"
