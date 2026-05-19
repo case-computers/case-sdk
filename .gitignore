@@ -43,6 +43,7 @@ secrets/
 
 # Internal docs not for public repo
 oss-plan.md
+HANDOFF.md
 
 # IDE / editors
 .idea/
