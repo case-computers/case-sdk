@@ -16,6 +16,15 @@
       "default": "soft",
       "description": "soft: failed verify steps log and continue. hard: raise E_VERIFY."
     },
+    "requires_user_action": {
+      "type": "boolean",
+      "default": false,
+      "description": "If true, the procedure expects the user to perform a manual setup step (e.g. select a clip) before running. CLI prompts interactively (skip with --yes). MCP case_run refuses with code E_USER_ACTION_REQUIRED unless user_action_confirmed=true is passed."
+    },
+    "user_action_prompt": {
+      "type": "string",
+      "description": "Human-readable instruction shown to the user when requires_user_action is true."
+    },
     "steps": {
       "type": "array",
       "minItems": 1,

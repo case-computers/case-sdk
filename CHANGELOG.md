@@ -4,12 +4,30 @@ All notable changes to `case-sdk` are documented here.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows semantic versioning once it hits 1.0.
 
-## [Unreleased] — OSS prep
+## [Unreleased]
+
+### Added
+
+- **User-action-required procedures.** JSON procedures may declare
+  `requires_user_action: true` plus `user_action_prompt` to signal that the
+  user needs to do something in the target app first (e.g. select a clip).
+  `case-sdk run` shows the prompt and waits for Enter; pass `--yes` to skip
+  in scripts. `case_mcp` surfaces the fields via `case_list_procedures`; the
+  MCP `case_run` tool refuses to execute such procedures unless the agent
+  passes `user_action_confirmed=true`, returning the structured error
+  `{success: false, code: "E_USER_ACTION_REQUIRED", prompt: "..."}`.
+- Built-in `davinci/append_to_timeline` and `davinci/append_to_timeline_hotkey`
+  now declare `requires_user_action: true` so agents and the CLI ask the
+  user to select a pool clip before firing the append.
 
 ### Changed
 
-- License swapped from FSL-1.1-Apache-2.0 to **Elastic License 2.0** (permanent non-compete; allows self-host, blocks third-party managed-service rehosting).
-- Doc cleanup: stripped commercial/internal sections from `DEVELOPER.md`; generalized "case-api" → "remote WebSocket server" in code and READMEs; removed `EmulatedHumanoid` attribution comments.
+- License swapped from FSL-1.1-Apache-2.0 to **Elastic License 2.0**
+  (permanent non-compete; allows self-host, blocks third-party
+  managed-service rehosting).
+- Doc cleanup: stripped commercial/internal sections from `DEVELOPER.md`;
+  generalized "case-api" → "remote WebSocket server" in code and READMEs;
+  removed `EmulatedHumanoid` attribution comments.
 - Examples pruned to 2 demo files (`open_textedit.json`, `verify_timeline.json`).
 
 ## [0.1.0]

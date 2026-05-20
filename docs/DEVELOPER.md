@@ -211,6 +211,45 @@ Shipped built-ins include `davinci/go_to_page`, `davinci/open_media_pool`, `davi
 
 ---
 
+## User-action-required procedures
+
+A procedure can declare it needs the user to do something in the target app
+before steps run (for example, select a clip in DaVinci's Media Pool).
+
+```json
+{
+  "description": "...",
+  "requires_user_action": true,
+  "user_action_prompt": "In DaVinci's Media Pool, click the clip you want to append. Then continue.",
+  "steps": [ ... ]
+}
+```
+
+**CLI:** `case-sdk run` prints the prompt and waits for Enter before executing.
+Pass `--yes` (or `-y`) to skip the prompt in scripts / CI. If stdin is not a TTY
+and `--yes` is not passed, the run aborts with exit code 130.
+
+**MCP:** `case_list_procedures` surfaces `requires_user_action` and
+`user_action_prompt` per entry. Agents must show the prompt to the user, wait
+for confirmation, then call:
+
+```json
+case_run({
+  "procedure": "davinci/append_to_timeline",
+  "params": {},
+  "user_action_confirmed": true
+})
+```
+
+Without `user_action_confirmed`, `case_run` returns
+`{success: false, code: "E_USER_ACTION_REQUIRED", prompt: "..."}` — relay the
+prompt to the user, then retry with the flag set.
+
+Only JSON procedures support this declaration; `.py` generators handle their
+own user-interaction logic.
+
+---
+
 ## Python procedures
 
 ```python

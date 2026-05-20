@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 _BUILTIN = Path(__file__).resolve().parent / "builtin_procedures"
 _USER_CASE = Path.home() / ".case" / "procedures"
@@ -58,24 +59,60 @@ def _collect_files() -> list[tuple[str, Path]]:
     return sorted(by_name.items())
 
 
-def list_procedures() -> list[dict[str, str]]:
-    """Return catalog entries ``{name, path, kind, description?}``."""
-    entries: list[dict[str, str]] = []
+def read_procedure_metadata(path: Path) -> dict[str, Any]:
+    """Read top-level metadata from a procedure file without executing it.
+
+    Returns a dict with optional ``description`` / ``verify_mode`` /
+    ``user_action_prompt`` plus a guaranteed ``requires_user_action`` bool.
+    Non-JSON files (``.py`` generators) get ``{"requires_user_action": False}``
+    — Python procedures handle their own user-interaction logic.
+
+    Malformed JSON is swallowed (returns the default) so a single broken
+    file under ``~/.case/procedures`` does not poison the catalog.
+    """
+    meta: dict[str, Any] = {"requires_user_action": False}
+    if path.suffix.lower() != ".json":
+        return meta
+    try:
+        import json
+
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return meta
+    if not isinstance(doc, dict):
+        return meta
+    if isinstance(doc.get("description"), str):
+        meta["description"] = doc["description"]
+    if doc.get("verify_mode") in ("soft", "hard"):
+        meta["verify_mode"] = doc["verify_mode"]
+    if bool(doc.get("requires_user_action")):
+        meta["requires_user_action"] = True
+        if isinstance(doc.get("user_action_prompt"), str):
+            meta["user_action_prompt"] = doc["user_action_prompt"]
+    return meta
+
+
+def list_procedures() -> list[dict[str, Any]]:
+    """Return catalog entries.
+
+    Each entry has ``name``, ``path``, ``kind`` and may include
+    ``description``, ``requires_user_action`` (when true), and
+    ``user_action_prompt`` (when ``requires_user_action`` is true).
+    """
+    entries: list[dict[str, Any]] = []
     for name, path in _collect_files():
-        item: dict[str, str] = {
+        item: dict[str, Any] = {
             "name": name,
             "path": str(path),
             "kind": path.suffix.lower().lstrip("."),
         }
-        if path.suffix.lower() == ".json":
-            try:
-                import json
-
-                doc = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(doc.get("description"), str):
-                    item["description"] = doc["description"]
-            except Exception:
-                pass
+        meta = read_procedure_metadata(path)
+        if "description" in meta:
+            item["description"] = meta["description"]
+        if meta.get("requires_user_action"):
+            item["requires_user_action"] = True
+            if "user_action_prompt" in meta:
+                item["user_action_prompt"] = meta["user_action_prompt"]
         entries.append(item)
     return sorted(entries, key=lambda e: e["name"])
 

@@ -45,6 +45,38 @@ def load_config() -> dict[str, Any]:
     return data.get("default", {})
 
 
+def _maybe_user_action_prompt(path: Path, skip: bool) -> int:
+    """Prompt the user when ``path`` declares ``requires_user_action``.
+
+    Returns 0 on continue (no prompt or user pressed Enter), 130 on abort.
+    """
+    from case_sdk.discovery import read_procedure_metadata
+
+    meta = read_procedure_metadata(path)
+    if not meta.get("requires_user_action"):
+        return 0
+    if skip:
+        return 0
+    prompt = meta.get(
+        "user_action_prompt",
+        "Manual setup needed in the target app before continuing.",
+    )
+    print("⚠  This procedure needs you first:", file=sys.stderr)
+    print(f"   {prompt}", file=sys.stderr)
+    if not sys.stdin.isatty():
+        print(
+            "\nstdin is not a TTY; pass --yes to skip the prompt or run interactively.",
+            file=sys.stderr,
+        )
+        return 130
+    try:
+        input("\nPress Enter when done (Ctrl-C to abort): ")
+    except (EOFError, KeyboardInterrupt):
+        print("\nAborted.", file=sys.stderr)
+        return 130
+    return 0
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     cfg = load_config()
     api_key = args.key or os.environ.get("CASE_SDK_API_KEY") or cfg.get("api_key")
@@ -63,7 +95,6 @@ def cmd_run(args: argparse.Namespace) -> int:
         params[k] = v
 
     target_path = Path(args.target).expanduser()
-    is_file = target_path.is_file()
     rt = Runtime(
         api_key=api_key,
         api_base=api_base,
@@ -71,19 +102,24 @@ def cmd_run(args: argparse.Namespace) -> int:
     )
 
     # Local: explicit file path, or a name resolved via procedure discovery.
-    run_local = is_file
-    if not run_local:
+    resolved_path: Path | None = None
+    if target_path.is_file():
+        resolved_path = target_path.resolve()
+    else:
         try:
             from case_sdk.discovery import resolve_procedure
 
-            resolve_procedure(args.target)
-            run_local = True
+            resolved_path = resolve_procedure(args.target)
         except ProcedureNotFound:
-            run_local = False
+            resolved_path = None
+
+    run_local = resolved_path is not None
 
     if run_local:
         if not args.skip_perm_check:
             ensure_perms()
+        if _maybe_user_action_prompt(resolved_path, args.yes) != 0:
+            return 130
         try:
             result = rt.execute_file(args.target, **params)
         except Exception as e:
@@ -273,6 +309,12 @@ def main(argv: list[str] | None = None) -> int:
         choices=("soft", "hard"),
         default=None,
         help="override verify_mode for JSON procedures (default soft)",
+    )
+    p_run.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="skip the user-action prompt for procedures that declare requires_user_action",
     )
     p_run.set_defaults(func=cmd_run)
 

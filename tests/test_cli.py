@@ -182,3 +182,79 @@ def test_run_invalid_param_format(isolated_home, capsys, tmp_path):
     code = cli.main(["run", str(proc), "--param", "no_equals", "--skip-perm-check"])
     assert code == 2
     assert "k=v" in capsys.readouterr().err
+
+
+def _user_action_proc(tmp_path):
+    proc = tmp_path / "needs.json"
+    proc.write_text(
+        json.dumps(
+            {
+                "requires_user_action": True,
+                "user_action_prompt": "Do the thing in the app",
+                "steps": [{"action": "noop"}],
+                "return": {"ok": True},
+            }
+        )
+    )
+    return proc
+
+
+def _fake_runtime():
+    from case_sdk.harness.executor import Harness
+    from case_sdk.runtime import Runtime
+
+    h = Harness()
+
+    @h.register_action("noop")
+    def _noop(**kwargs):
+        return {}
+
+    return lambda *a, **kw: Runtime(harness=h)
+
+
+def test_run_prompts_when_user_action_required(
+    isolated_home, capsys, tmp_path, monkeypatch
+):
+    proc = _user_action_proc(tmp_path)
+    calls: list[str] = []
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda *a, **kw: calls.append("entered") or "")
+
+    with patch("case_sdk.cli.Runtime", side_effect=_fake_runtime()), patch(
+        "case_sdk.cli.ensure_perms"
+    ):
+        code = cli.main(["run", str(proc), "--skip-perm-check"])
+    err = capsys.readouterr().err
+    assert code == 0
+    assert "Do the thing in the app" in err
+    assert calls == ["entered"]
+
+
+def test_run_skips_prompt_with_yes_flag(
+    isolated_home, capsys, tmp_path, monkeypatch
+):
+    proc = _user_action_proc(tmp_path)
+    calls: list[str] = []
+    monkeypatch.setattr("builtins.input", lambda *a, **kw: calls.append("entered") or "")
+
+    with patch("case_sdk.cli.Runtime", side_effect=_fake_runtime()), patch(
+        "case_sdk.cli.ensure_perms"
+    ):
+        code = cli.main(["run", str(proc), "--skip-perm-check", "--yes"])
+    assert code == 0
+    assert calls == []  # prompt never invoked
+
+
+def test_run_aborts_when_stdin_not_tty(
+    isolated_home, capsys, tmp_path, monkeypatch
+):
+    proc = _user_action_proc(tmp_path)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    monkeypatch.setattr("builtins.input", lambda *a, **kw: "")
+
+    with patch("case_sdk.cli.ensure_perms"):
+        code = cli.main(["run", str(proc), "--skip-perm-check"])
+    err = capsys.readouterr().err
+    assert code == 130
+    assert "TTY" in err
