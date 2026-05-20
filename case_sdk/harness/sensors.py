@@ -7,9 +7,8 @@ never mutate the world; if they do, route the side-effect through an Action.
 Three are registered by default:
 
 * ``window_title`` — frontmost app + window title via NSWorkspace / atomacos.
-  Uses the ``threading.Thread + join(timeout=2.0)`` pattern from
-  ``EmulatedHumanoid/world_model.py`` because the macOS AX call can hang
-  indefinitely during app transitions.
+  Uses a ``threading.Thread + join(timeout=2.0)`` pattern because the macOS AX
+  call can hang indefinitely during app transitions.
 * ``ax_value`` — read ``AXValue`` for a described element. v0 stub: returns
   ``{"value": ""}`` when nothing resolves.
 * ``screenshot`` — capture (and optionally crop) the screen. Enforces an 8 KB
@@ -33,7 +32,7 @@ from case_sdk.harness.executor import Harness
 # eventually move to a blob URL handled server-side. Out of scope here.
 INLINE_BYTE_LIMIT = 8 * 1024
 
-# Frontmost-app names whose value is misleading (matches EH world_model).
+# Frontmost-app names whose value is misleading and should be treated as empty.
 _BLACKLISTED_FRONTMOST = frozenset(
     {
         "Antigravity",
@@ -112,9 +111,9 @@ def _frontmost_app_name() -> str:
 def _frontmost_window_title() -> str | None:
     """Try to read the frontmost window's AXTitle via atomacos.
 
-    The AX call can hang during app transitions (a macOS quirk documented in
-    ``EmulatedHumanoid/world_model.py``). To avoid taking the whole runtime
-    down with us we run it on a daemon thread and bail after 2 seconds.
+    The AX call can hang during app transitions (a known macOS quirk). To avoid
+    taking the whole runtime down with us we run it on a daemon thread and bail
+    after 2 seconds.
     """
     try:
         import atomacos  # noqa: WPS433
