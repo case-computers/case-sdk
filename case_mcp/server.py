@@ -48,6 +48,16 @@ PROCEDURES
 - JSON procedures support verify steps (Project.db for DaVinci). Default verify
   mode is soft (warn on stderr). Use verify_mode="hard" to fail closed.
 
+USER-ACTION-REQUIRED PROCEDURES
+- Some procedures declare ``requires_user_action: true`` in their JSON.
+  case_list_procedures surfaces this flag plus ``user_action_prompt``.
+- Before calling case_run on such a procedure: show the user the prompt,
+  wait for them to do the action in the target app, then call case_run
+  with ``user_action_confirmed=true``.
+- If you forget, case_run returns ``{success: false, code:
+  "E_USER_ACTION_REQUIRED", prompt: "..."}`` — relay the prompt to the
+  user and retry with the flag set.
+
 BUILT-IN DAVINCI PROCEDURES (require Resolve open + timeline on Edit page)
 - davinci/focus_resolve — activate DaVinci
 - davinci/import_media — one file (filepath)
@@ -227,6 +237,7 @@ def create_mcp():
         params: dict[str, Any] | None = None,
         verify_mode: str | None = None,
         check_permissions: bool = True,
+        user_action_confirmed: bool = False,
     ) -> dict[str, Any]:
         """Execute a local procedure by name or filesystem path.
 
@@ -235,10 +246,18 @@ def create_mcp():
             params: kwargs passed to the procedure (filepath, etc.).
             verify_mode: "soft" or "hard" for JSON verify steps; default soft.
             check_permissions: if True, ensure Accessibility before running.
+            user_action_confirmed: pass True after the user has performed the
+                manual action required by procedures that declare
+                ``requires_user_action`` in their JSON. Without confirmation
+                such procedures fail fast with code ``E_USER_ACTION_REQUIRED``.
         """
         from case_sdk import ensure_perms
         from case_sdk.protocol import ClientError, ProcedureError
-        from case_sdk.discovery import ProcedureNotFound
+        from case_sdk.discovery import (
+            ProcedureNotFound,
+            read_procedure_metadata,
+            resolve_procedure,
+        )
 
         if check_permissions:
             ensure_perms()
@@ -248,19 +267,36 @@ def create_mcp():
         rt = _runtime(verify_mode=mode)
 
         try:
-            result = rt.execute_file(procedure, **run_params)
-            return {
-                "success": True,
-                "procedure": procedure,
-                "params": run_params,
-                "result": result,
-            }
+            resolved = resolve_procedure(procedure)
         except ProcedureNotFound as e:
             return {
                 "success": False,
                 "procedure": procedure,
                 "error": str(e),
                 "code": "E_NOT_FOUND",
+            }
+
+        meta = read_procedure_metadata(resolved)
+        if meta.get("requires_user_action") and not user_action_confirmed:
+            prompt = meta.get(
+                "user_action_prompt",
+                "Manual setup needed in the target app before continuing.",
+            )
+            return {
+                "success": False,
+                "procedure": procedure,
+                "code": "E_USER_ACTION_REQUIRED",
+                "error": f"User action required: {prompt}",
+                "prompt": prompt,
+            }
+
+        try:
+            result = rt.execute_file(procedure, **run_params)
+            return {
+                "success": True,
+                "procedure": procedure,
+                "params": run_params,
+                "result": result,
             }
         except (ClientError, ProcedureError) as e:
             return {
