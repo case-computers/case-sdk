@@ -1,6 +1,8 @@
 {
   "description": "Append via Fn+F9 when menu clicks fail (function-row / focus issues). Pool clip must already be selected.",
   "verify_mode": "soft",
+  "requires_user_action": true,
+  "user_action_prompt": "In DaVinci's Media Pool, click the clip you want to append. Then continue.",
   "steps": [
     {"action": "activate_app", "name": "DaVinci Resolve", "settle_ms": 700},
     {"verify": "davinci.db_snapshot", "as": "before"},
