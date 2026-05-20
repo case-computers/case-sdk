@@ -235,4 +235,4 @@ def procedure(params):
 
 ## License
 
-FSL-1.1-Apache-2.0. Source-available; converts to Apache 2.0 two years after each release. Using case-sdk to operate a competing hosted procedure-library service is not permitted; all other use is fine. See `LICENSE` for the full text.
+Elastic License 2.0 (ELv2). Source-available. You may use, modify, and self-host case-sdk freely. You may not provide it to third parties as a hosted or managed service. See `LICENSE` for the full text.

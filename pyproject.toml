@@ -5,10 +5,10 @@ build-backend = "hatchling.build"
 [project]
 name = "case-sdk"
 version = "0.1.0"
-description = "Dual-mode runtime for desktop GUI automation. Local procedures free, paid procedures stream from the case-api server."
+description = "Runtime for desktop GUI automation on macOS. Run procedures locally, or stream them from a remote WebSocket server."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "FSL-1.1-Apache-2.0" }
+license = { text = "Elastic-2.0" }
 authors = [
     { name = "Case" },
 ]
