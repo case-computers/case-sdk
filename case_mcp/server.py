@@ -61,7 +61,7 @@ AX AUTHORING
 
 REMOTE MODE
 - case_run only executes *local* discovered procedures and file paths.
-- Streaming remote procedures (case-api) use the case-sdk CLI with an API key;
+- Streaming remote procedures use the case-sdk CLI with an API key;
   not exposed here yet.
 
 Call case_help() for the tool catalog and this guide as structured JSON.

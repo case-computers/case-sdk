@@ -3,11 +3,11 @@
 Dual-mode runtime for desktop GUI automation on macOS.
 
 - **Local mode** — write your own procedures in Python and run them on your machine.
-- **Remote mode** — with an API key, stream verified procedures from the case-api server. The procedure source never lands on the client's disk.
+- **Remote mode** — with an API key, stream procedures from a remote WebSocket server. The procedure source never lands on the client's disk.
 
 Both modes share the same `Runtime` API.
 
-**Developers:** see [docs/DEVELOPER.md](docs/DEVELOPER.md) for API contracts, JSON schemas (`docs/schemas/`), procedure authoring, and MCP vs the `davinci-demo` branch.
+**Developers:** see [docs/DEVELOPER.md](docs/DEVELOPER.md) for API contracts, JSON schemas (`docs/schemas/`), procedure authoring, and MCP.
 
 ## Install
 
@@ -213,7 +213,7 @@ claude mcp add case-sdk -- python -m case_mcp.server
 Example agent flow: `case_list_procedures` → `case_focus_app("DaVinci Resolve")` →
 `case_run("davinci/import_and_append", {"filepath": "/abs/path/clip.mov"})`.
 
-Remote streaming procedures (case-api) remain CLI-only for now (`case-sdk run` with `--key`).
+Remote streaming procedures remain CLI-only for now (`case-sdk run` with `--key`).
 
 ## Error handling
 
@@ -235,4 +235,4 @@ def procedure(params):
 
 ## License
 
-FSL-1.1-Apache-2.0. Source-available; converts to Apache 2.0 two years after each release. Using case-sdk to operate a competing hosted procedure-library service is not permitted; all other use is fine. See `LICENSE` for the full text.
+Elastic License 2.0 (ELv2). Source-available. You may use, modify, and self-host case-sdk freely. You may not provide it to third parties as a hosted or managed service. See `LICENSE` for the full text.

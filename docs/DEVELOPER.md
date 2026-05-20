@@ -1,6 +1,6 @@
 # case-sdk — developer guide
 
-This document describes the **public surfaces** on `main`: Python API, CLI, JSON procedures, and MCP. It is the stability reference for Phase 0–1; behavior may evolve until we tag `v0.2.0`.
+This document describes the **public surfaces**: Python API, CLI, JSON procedures, and MCP. It is the stability reference for the current release; behavior may evolve until `v0.2.0`.
 
 For install and quick start, see [README.md](../README.md).
 
@@ -15,7 +15,7 @@ Agent / human
     └── case-mcp (stdio)      ──┼──► case_sdk.Runtime
                                   │         │
                                   │         ├── LocalDriver → Harness (actions/sensors)
-                                  │         └── RemoteDriver → case-api (optional)
+                                  │         └── RemoteDriver → remote server (BYO)
                                   │
                                   ├── inspect (AX tree, element_ref)
                                   ├── steps (JSON procedures)
@@ -25,8 +25,6 @@ Agent / human
 
 **Rule:** automation logic lives in `case_sdk`. CLI and MCP are thin adapters.
 
-**Not on `main`:** `case_mcp_eh` (see [MCP vs davinci-demo](#mcp-on-main-vs-davinci-demo-branch) below).
-
 ---
 
 ## Public Python API
@@ -35,7 +33,7 @@ Agent / human
 |--------|---------|
 | `Runtime()` | Local + optional remote execution |
 | `Runtime.execute_file(path, **params)` | Run `.py` generator or `.json` steps |
-| `Runtime.execute(name, **params)` | Remote procedure (needs `api_key`) |
+| `Runtime.execute(name, **params)` | Remote procedure on a WebSocket server (needs `api_key`) |
 | `Action(name, **kwargs)` | Yield from Python procedures |
 | `Sensor(name, **kwargs)` | Yield from Python procedures |
 | `app_tree(app, ...)` | AX hierarchy as JSON |
@@ -51,7 +49,7 @@ Agent / human
 from case_sdk import Runtime
 
 rt = Runtime(
-    api_key=None,           # set for remote Mode B
+    api_key=None,           # set for remote execution against a WebSocket server
     verify_mode="soft",     # or "hard" for JSON verify steps
 )
 result = rt.execute_file("davinci/import_and_append", filepath="/path/clip.mov")
@@ -100,7 +98,7 @@ Points at one Accessibility element. Passed as `element_ref` to harness actions.
 | `value` | | Exact `AXValue` |
 | `path` | | Index list from root, or `[{"role":"AXWindow"}, {"index": 2}]` |
 
-**Authoring workflow (recorder deferred):**
+**Authoring workflow:**
 
 1. `case-sdk ax-tree "Your App" --depth 10` or `--find --role AXButton --title-contains Save`
 2. Copy `ref` from find results, or build from tree `role` / `title` / `path`
@@ -146,9 +144,9 @@ Limits: `max_depth` (default 12), `max_children` (80), `max_nodes` (2500). When 
 
 ---
 
-## JSON procedures (Phase 2)
+## JSON procedures
 
-**Format:** JSON only on `main` (YAML deferred).
+**Format:** JSON only.
 
 Minimal procedure:
 
@@ -209,8 +207,6 @@ case-sdk procedures
 case-sdk run davinci/import_and_append --param filepath=/abs/path/clip.mov
 ```
 
-**Parity:** more DaVinci flows will be added as JSON examples (2–3 at a time) from the execution engine reference; not a full port of every EH procedure.
-
 Shipped built-ins include `davinci/go_to_page`, `davinci/open_media_pool`, `davinci/import_media_on_edit`, `davinci/import_media`, `davinci/append_to_timeline`, `davinci/import_and_append`, and others (see `case-sdk procedures`).
 
 ---
@@ -231,9 +227,9 @@ Same `LocalDriver` loop as JSON steps. Use when you need branches, loops, or `tr
 
 ---
 
-## Verification (Phase 3)
+## Verification
 
-Verify steps run **inside** JSON procedures (not in MCP prompts). List names:
+Verify steps run **inside** JSON procedures. List names:
 
 ```bash
 case-sdk verify-list
@@ -249,82 +245,31 @@ DaVinci / Project.db verifiers: `davinci.db_snapshot`, `davinci.db_delta`, `davi
 - **soft** — log warning, continue (default; good for unsaved Resolve projects).
 - **hard** — `ClientError` code `E_VERIFY`.
 
-Additional verify types (generic DB, AX state, custom hooks) are **not decided yet** — pending product choice.
-
 ---
 
-## MCP on main vs davinci-demo branch
+## MCP
 
-### What you have on **main** (complete for this repo’s SDK)
-
-| Piece | Role |
-|-------|------|
-| `case_sdk` | **All execution logic**: harness, drivers, inspect, steps, verify, discovery, built-in JSON procedures |
-| `case_mcp` | **Thin MCP** (stdio) that calls `case_sdk` — same as CLI, not a second engine |
-
-Tools: `case_help`, `case_doctor`, `case_focus_app`, `case_ax_tree`, `case_find_elements`, `case_list_procedures`, `case_list_verifiers`, `case_run`.
+`case_mcp` is a thin stdio server that delegates every tool to `case_sdk`. No automation logic lives in MCP.
 
 ```bash
 pip install -e ".[mcp]"
 claude mcp add case-sdk -- python -m case_mcp.server
 ```
 
-An agent on `main` can run `case_run("davinci/import_and_append", {"filepath": "..."})` with **full execution** — no EmulatedHumanoid repo required.
+Tools: `case_help`, `case_doctor`, `case_focus_app`, `case_ax_tree`, `case_find_elements`, `case_list_procedures`, `case_list_verifiers`, `case_run`.
 
-### What **`case_mcp_eh`** is (only on **davinci-demo** / `deadline` checkout)
-
-A **different, older MCP server** that:
-
-- Imports **`resolve_agent.py` from EmulatedHumanoid** (external repo, ~69 procedures, EH pre/postconditions).
-- Exposes only `davinci_list_procedures`, `davinci_call`, `davinci_focus`.
-- Does **not** use the new `case_sdk` JSON/discovery/verify stack on `main`.
-
-We **did not** put `case_mcp_eh` on `main` because:
-
-1. You already have a **full working MCP on `main`** (`case_mcp`) for everything built here.
-2. `case_mcp_eh` would drag in EH as a required dependency and duplicate the world you are replacing with JSON + `case_sdk`.
-3. You wanted to avoid merging `davinci-demo` into `main` and avoid git conflicts.
-
-**“Shim on main ❌”** means: we did not copy that EH wrapper to `main`. It is **not** that MCP on `main` is incomplete — it means the **EH bridge** stays on the other branch until you explicitly want EH’s 69 procedures callable via MCP without porting them to JSON.
-
-If you later need one EH procedure before JSON parity, options are:
-
-- Port that procedure to `builtin_procedures/davinci/*.json`, or
-- Add an optional `case_mcp_eh` extra on `main` that depends on `$EH_REPO_PATH` (compat only).
+An agent can run `case_run("davinci/import_and_append", {"filepath": "..."})` for full local execution.
 
 ---
 
-## case-api, paid library, and multiple harnesses
+## Deferred
 
-**Direction (your decision):**
-
-- **Free users:** local built-ins + `~/.case/procedures` (what ships in the wheel).
-- **Paid users:** procedures served by **case-api** (Mode B) — catalog in your DB (Supabase/Postgres is fine); client never stores procedure source.
-- **Not production:** shipping all 69 EH Python procedures inside the client via `case_mcp_eh`.
-
-**Multiple harnesses:** the wire protocol is already **primitive names + args** (`action` / `sensor` envelopes). A case-api procedure is ideally stored as **JSON steps** (or compiled to steps server-side). The **client** registers whichever harness implements those names:
-
-| Client harness | Examples |
-|----------------|----------|
-| `case_sdk` (default) | pyautogui, AX, DaVinci menus |
-| Future / plugin | browser CDP, another app’s bridge |
-
-Paid API usage = `api_key` + allowed procedure names + optional `harness_profile` in procedure metadata so the server only emits actions the client understands. EH-specific logic stays **server-side** until ported to JSON — not required in the pip package.
-
-**69 procedures:** decide per procedure whether to port to JSON (local/free tier), host on case-api (paid), or drop. No need to copy EH into Supabase as Python.
-
----
-
-## Deferred / TBD
-
-| Item | Phase | Status |
-|------|-------|--------|
-| `case-sdk record` (click → procedure file) | 1 | Deferred |
-| YAML procedures | 2 | JSON only |
-| More DaVinci JSON examples | 2 | 2–3 at a time when you supply reference flows |
-| Generic / AX verify | 3 | You will decide |
-| Remote procedures over MCP | 4 | CLI only today |
-| Pack-loaded MCP instructions | 4 | Planner text still in `server.py`; can move to pack README later |
+| Item | Notes |
+|------|-------|
+| `case-sdk record` (click → procedure file) | Not yet implemented |
+| YAML procedures | JSON only for now |
+| Generic / AX verify steps | DaVinci DB verifiers shipped; broader verify TBD |
+| Remote procedures over MCP | Use the CLI with an API key for now |
 
 ---
 

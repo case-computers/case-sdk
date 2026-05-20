@@ -1,10 +1,9 @@
 """GUI harness — concrete implementations of action primitives.
 
-P2 shipped one primitive: ``open_app``. P3 fills in the full pyautogui + AX set
-that was ported from ``EmulatedHumanoid/backends/gui.py``. Everything LLM-
-related (action schemas, element formatting, vision-server / `/state`, browser
-CDP launch, ReAct find_element, prompt supplements) is intentionally NOT ported
-— that lives server-side in ``case-api``.
+P2 shipped one primitive: ``open_app``. P3 fills in the full pyautogui + AX set.
+Everything LLM-related (action schemas, element formatting, vision-server /
+`/state`, browser CDP launch, ReAct find_element, prompt supplements) is
+intentionally NOT included here — that lives on the server side.
 
 All registered functions take only the kwargs that appear on the wire (see
 ``case_sdk.protocol``). Names of params must match the protocol exactly because
