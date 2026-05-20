@@ -91,3 +91,82 @@ def test_case_run_json_procedure(server, tmp_path):
         )
     assert out["success"] is True
     assert out["result"].get("success") is True
+
+
+def test_case_list_procedures_surfaces_user_action(server):
+    fn = server._tool_manager._tools["case_list_procedures"].fn
+    out = fn()
+    entries = {e["name"]: e for e in out["procedures"]}
+    item = entries.get("davinci/append_to_timeline")
+    assert item is not None
+    assert item.get("requires_user_action") is True
+    assert "Media Pool" in item.get("user_action_prompt", "")
+
+
+def test_case_run_user_action_required_without_confirmation(server, tmp_path):
+    import json
+
+    proc = tmp_path / "needs.json"
+    proc.write_text(
+        json.dumps(
+            {
+                "requires_user_action": True,
+                "user_action_prompt": "Click the thing",
+                "steps": [{"action": "wait", "ms": 1}],
+                "return": {"success": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    fn = server._tool_manager._tools["case_run"].fn
+    out = fn(
+        procedure=str(proc),
+        params={},
+        check_permissions=False,
+    )
+    assert out["success"] is False
+    assert out["code"] == "E_USER_ACTION_REQUIRED"
+    assert "Click the thing" in out["prompt"]
+
+
+def test_case_run_user_action_confirmed_executes(server, tmp_path):
+    import json
+
+    from case_sdk.harness.executor import Harness
+
+    proc = tmp_path / "needs.json"
+    proc.write_text(
+        json.dumps(
+            {
+                "requires_user_action": True,
+                "user_action_prompt": "Click the thing",
+                "steps": [{"action": "wait", "ms": 1}],
+                "return": {"success": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    fake = Harness()
+
+    @fake.register_action("wait")
+    def wait(ms: int):
+        return {"slept_ms": ms}
+
+    with pytest.MonkeyPatch.context() as mp:
+        from case_sdk import Runtime
+
+        mp.setattr(
+            "case_mcp.server._runtime",
+            lambda verify_mode=None: Runtime(harness=fake, verify_mode=verify_mode),
+        )
+        fn = server._tool_manager._tools["case_run"].fn
+        out = fn(
+            procedure=str(proc),
+            params={},
+            check_permissions=False,
+            user_action_confirmed=True,
+        )
+    assert out["success"] is True
+    assert out["result"].get("success") is True
