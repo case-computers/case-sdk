@@ -14,7 +14,7 @@ Both modes share the same `Runtime` API.
 From source (until the package is on PyPI):
 
 ```bash
-git clone https://github.com/DaemonLabs/case-sdk
+git clone https://github.com/daemonlabshq/case-sdk
 cd case-sdk
 pip install -e .
 pip install -e ".[mcp]"    # optional: MCP server for Claude Code / agents
@@ -65,22 +65,31 @@ Or from the shell:
 case-sdk run my_proc.py
 ```
 
-## Run a remote procedure
+## Run a remote procedure (BYO server / managed case-api coming)
+
+case-sdk speaks a WebSocket envelope protocol (see `case_sdk.protocol`) so a
+server can hold a procedure and stream one step at a time while the client
+harness executes it locally. You bring your own server today; the managed
+**case-api** service is in active development and will be the default hosted
+backend.
 
 ```python
 from case_sdk import Runtime
-rt = Runtime(api_key="sk_...")
+rt = Runtime(api_key="sk_...", api_base="wss://your-server.example/ws")
 rt.execute("add_clip_to_timeline", filepath="/path/to/clip.mov")
 ```
 
 Or:
 
 ```bash
-case-sdk init                                                  # one-time, stores the key
+case-sdk init --api wss://your-server.example/ws --key sk_...    # one-time
 case-sdk run add_clip_to_timeline --param filepath=/x.mov
 ```
 
-In remote mode the server holds the procedure. The runtime receives one action at a time over WebSocket, runs it locally, returns the observation, and waits for the next instruction.
+In remote mode the server holds the procedure. The runtime receives one
+action at a time over WebSocket, runs it locally, returns the observation,
+and waits for the next instruction. Procedure source never lands on the
+client's disk.
 
 ## Built-in primitives
 

@@ -193,12 +193,13 @@ def cmd_init(args: argparse.Namespace) -> int:
         except EOFError:
             api_key = ""
 
-    api_base = args.api or "wss://api.case.dev"
+    api_base = args.api or ""
 
     lines = ["[default]"]
     if api_key:
         lines.append(f'api_key = "{api_key}"')
-    lines.append(f'api_base = "{api_base}"')
+    if api_base:
+        lines.append(f'api_base = "{api_base}"')
     CONFIG_FILE.write_text("\n".join(lines) + "\n")
     print(f"wrote {CONFIG_FILE}")
     return 0

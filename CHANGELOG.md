@@ -20,16 +20,6 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
   now declare `requires_user_action: true` so agents and the CLI ask the
   user to select a pool clip before firing the append.
 
-### Changed
-
-- License swapped from FSL-1.1-Apache-2.0 to **Elastic License 2.0**
-  (permanent non-compete; allows self-host, blocks third-party
-  managed-service rehosting).
-- Doc cleanup: stripped commercial/internal sections from `DEVELOPER.md`;
-  generalized "case-api" → "remote WebSocket server" in code and READMEs;
-  removed `EmulatedHumanoid` attribution comments.
-- Examples pruned to 2 demo files (`open_textedit.json`, `verify_timeline.json`).
-
 ## [0.1.0]
 
 First version.

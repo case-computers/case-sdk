@@ -41,9 +41,8 @@ htmlcov/
 *.key
 secrets/
 
-# Internal docs not for public repo
-oss-plan.md
-HANDOFF.md
+# Claude Code local state
+.claude/
 
 # IDE / editors
 .idea/
