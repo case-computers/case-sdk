@@ -32,8 +32,8 @@ def enrich_params(params: dict[str, Any]) -> dict[str, Any]:
     if "filepath" in out and "clip_basename" not in out:
         out["clip_basename"] = os.path.basename(str(out["filepath"]))
     if "page" in out and "page_title" not in out:
-        # EH page tabs: match AXCheckBox title case-insensitively; common titles
-        # are Title Case ("Edit", "Media Pool").
+        # Resolve page tabs match AXCheckBox title case-insensitively; common
+        # titles are Title Case ("Edit", "Media Pool").
         page = str(out["page"]).strip()
         out["page_title"] = page[:1].upper() + page[1:] if page else page
     return out

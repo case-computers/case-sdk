@@ -1,9 +1,10 @@
 {
+  "description": "Open TextEdit and type a greeting; demonstrates ${name} param substitution.",
   "steps": [
     {"action": "open_app", "name": "TextEdit"},
     {"action": "wait", "ms": 800},
-    {"action": "type", "text": "hello from case-sdk steps"},
-    {"sensor": "window_title"}
+    {"action": "type", "text": "hello ${name} from case-sdk"},
+    {"sensor": "window_title", "save_as": "title"}
   ],
-  "return": {"success": true}
+  "return": {"success": true, "title": "${title}"}
 }

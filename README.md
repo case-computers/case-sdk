@@ -14,7 +14,7 @@ Both modes share the same `Runtime` API.
 From source (until the package is on PyPI):
 
 ```bash
-git clone https://github.com/EmulatedHumanoid/case-sdk
+git clone https://github.com/DaemonLabs/case-sdk
 cd case-sdk
 pip install -e .
 pip install -e ".[mcp]"    # optional: MCP server for Claude Code / agents
@@ -23,6 +23,17 @@ pip install -e ".[mcp]"    # optional: MCP server for Claude Code / agents
 Grant Accessibility in *System Settings → Privacy & Security → Accessibility*. Then run `case-sdk doctor` to verify.
 
 Screen Recording is only required if a procedure uses the `screenshot` sensor.
+
+## Quickstart
+
+```bash
+case-sdk doctor                                      # check permissions + config
+case-sdk procedures                                  # list built-in DaVinci procedures
+case-sdk run davinci/focus_resolve                   # bring DaVinci frontmost
+case-sdk run examples/open_textedit.json --param name=world
+```
+
+`case-sdk doctor` reports any missing macOS permissions and deep-links to System Settings. `case-sdk procedures` shows the discoverable catalog (built-ins plus anything under `~/.case/procedures/`).
 
 ## Write a procedure
 
@@ -73,7 +84,7 @@ In remote mode the server holds the procedure. The runtime receives one action a
 
 ## Built-in primitives
 
-Actions: `open_app`, `click`, `type`, `hotkey`, `scroll`, `mouse_down`, `mouse_up`, `wait`, `ax_press`, `ax_set_value`, `fn_key`, `drag`.
+Actions: `open_app`, `activate_app`, `click`, `click_ref`, `type`, `hotkey`, `scroll`, `mouse_down`, `mouse_up`, `wait`, `ax_press`, `ax_set_value`, `fn_key`, `drag`, `menu_click`.
 
 Sensors: `window_title`, `ax_value`, `screenshot`.
 
@@ -214,6 +225,25 @@ Example agent flow: `case_list_procedures` → `case_focus_app("DaVinci Resolve"
 `case_run("davinci/import_and_append", {"filepath": "/abs/path/clip.mov"})`.
 
 Remote streaming procedures remain CLI-only for now (`case-sdk run` with `--key`).
+
+### MCP troubleshooting
+
+If `claude mcp list` shows **`case-sdk: ... ✗ Failed to connect`**, the most
+common cause is the `mcp` package missing from the venv you installed
+case-sdk into. Verify and fix:
+
+```bash
+/path/to/your/venv/bin/pip show mcp
+/path/to/your/venv/bin/pip install "mcp[cli]>=1.0"
+claude mcp remove case-sdk
+claude mcp add case-sdk -- /path/to/your/venv/bin/python -m case_mcp.server
+```
+
+A quick import probe that crashes loudly when `mcp` is missing:
+
+```bash
+python -c "from case_mcp.server import create_mcp; create_mcp(); print('ok')"
+```
 
 ## Error handling
 
