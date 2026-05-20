@@ -7,6 +7,8 @@ Dual-mode runtime for desktop GUI automation on macOS.
 
 Both modes share the same `Runtime` API.
 
+**Developers:** see [docs/DEVELOPER.md](docs/DEVELOPER.md) for API contracts, JSON schemas (`docs/schemas/`), procedure authoring, and MCP vs the `davinci-demo` branch.
+
 ## Install
 
 From source (until the package is on PyPI):
@@ -143,7 +145,10 @@ Search path (first match wins): ``$CASE_SDK_PROCEDURES_PATH`` → ``~/.case/proc
 | Built-in name | Purpose |
 |---------------|---------|
 | `davinci/focus_resolve` | Activate DaVinci |
+| `davinci/go_to_page` | Switch page tab (`--param page=edit`) |
+| `davinci/open_media_pool` | Edit page + open Media Pool panel |
 | `davinci/import_media` | Import one file (`filepath`, auto `clip_basename`) |
+| `davinci/import_media_on_edit` | Go to Edit, then import (`filepath`) |
 | `davinci/append_to_timeline` | Append selected pool clip (menu click + DB verify) |
 | `davinci/append_to_timeline_hotkey` | Append via Fn+F9 fallback |
 | `davinci/import_and_append` | Import then append |

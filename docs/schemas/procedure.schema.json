@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://case.dev/schemas/procedure.json",
+  "title": "case_sdk_procedure",
+  "description": "JSON step-list procedure executed by Runtime.execute_file() and case-sdk run.",
+  "type": "object",
+  "required": ["steps"],
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Human-readable summary; shown in case-sdk procedures catalog."
+    },
+    "verify_mode": {
+      "type": "string",
+      "enum": ["soft", "hard"],
+      "default": "soft",
+      "description": "soft: failed verify steps log and continue. hard: raise E_VERIFY."
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "return": {
+      "type": "object",
+      "description": "Procedure result after ${param} substitution. verify_results is added by the runtime."
+    }
+  },
+  "$defs": {
+    "step": {
+      "oneOf": [
+        { "$ref": "#/$defs/action_step" },
+        { "$ref": "#/$defs/sensor_step" },
+        { "$ref": "#/$defs/verify_step" }
+      ]
+    },
+    "action_step": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "Harness action name: click, type, hotkey, wait, ax_press, menu_click, fn_key, ..."
+        }
+      },
+      "additionalProperties": true
+    },
+    "sensor_step": {
+      "type": "object",
+      "required": ["sensor"],
+      "properties": {
+        "sensor": {
+          "type": "string",
+          "description": "Harness sensor name: window_title, ax_value, screenshot"
+        },
+        "save_as": {
+          "type": "string",
+          "description": "Store observation value in params for later ${save_as} substitution."
+        }
+      },
+      "additionalProperties": true
+    },
+    "verify_step": {
+      "type": "object",
+      "required": ["verify"],
+      "properties": {
+        "verify": {
+          "type": "string",
+          "description": "Verifier id from case-sdk verify-list (e.g. davinci.db_delta)."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

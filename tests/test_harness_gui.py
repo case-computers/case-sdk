@@ -49,6 +49,7 @@ def test_default_harness_registers_expected_actions():
         "mouse_up",
         "wait",
         "ax_press",
+        "click_ref",
         "ax_set_value",
         "fn_key",
         "drag",

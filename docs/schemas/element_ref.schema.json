@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://case.dev/schemas/element_ref.json",
+  "title": "element_ref",
+  "description": "Locates one Accessibility element for ax_press, ax_set_value, or ax_value sensor steps.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "app": {
+      "type": "string",
+      "description": "Localized application name substring (e.g. DaVinci Resolve). Omit to use the frontmost app."
+    },
+    "role": {
+      "type": "string",
+      "description": "AXRole string (e.g. AXButton, AXTextField)."
+    },
+    "title": {
+      "type": "string",
+      "description": "Exact AXTitle match."
+    },
+    "title_contains": {
+      "type": "string",
+      "description": "Case-insensitive substring match on AXTitle (e.g. page tab \"edit\")."
+    },
+    "value": {
+      "type": "string",
+      "description": "Exact AXValue match."
+    },
+    "path": {
+      "type": "array",
+      "description": "Walk from app root: child indices and/or match segments.",
+      "items": {
+        "oneOf": [
+          { "type": "integer", "minimum": 0 },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "index": { "type": "integer", "minimum": 0 },
+              "role": { "type": "string" },
+              "title": { "type": "string" },
+              "value": { "type": "string" }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "anyOf": [
+    { "required": ["role"] },
+    { "required": ["title"] },
+    { "required": ["value"] },
+    { "required": ["path"] }
+  ]
+}

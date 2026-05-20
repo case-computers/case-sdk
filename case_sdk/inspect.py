@@ -119,6 +119,7 @@ def resolve_element_ref(element_ref: dict[str, Any] | str | None) -> Any:
     path = element_ref.get("path")
     role = element_ref.get("role")
     title = element_ref.get("title")
+    title_contains = element_ref.get("title_contains")
     value = element_ref.get("value")
 
     try:
@@ -135,6 +136,10 @@ def resolve_element_ref(element_ref: dict[str, Any] | str | None) -> Any:
     if not (role or title or value):
         return None
 
+    if title_contains is not None:
+        return _walk_for_title_contains(
+            root, role=role, title_contains=str(title_contains), depth=0
+        )
     return _walk_for_match(root, role=role, title=title, value=value, depth=0)
 
 
@@ -423,6 +428,26 @@ def _resolve_by_path(root: Any, path: list[Any]) -> Any | None:
             continue
         return None
     return current
+
+
+def _walk_for_title_contains(
+    elem: Any, *, role: str | None, title_contains: str, depth: int
+) -> Any | None:
+    if depth > 24:
+        return None
+    elem_role = _safe_attr(elem, "AXRole")
+    needle = title_contains.lower()
+    if (not role or elem_role == role) and needle:
+        elem_title = _safe_attr(elem, "AXTitle")
+        if elem_title and needle in str(elem_title).lower():
+            return elem
+    for child in _safe_children(elem):
+        match = _walk_for_title_contains(
+            child, role=role, title_contains=title_contains, depth=depth + 1
+        )
+        if match is not None:
+            return match
+    return None
 
 
 def _walk_for_match(

@@ -1,0 +1,24 @@
+{
+  "description": "Go to Edit page and open the Media Pool panel (AXCheckBox toggle).",
+  "verify_mode": "soft",
+  "steps": [
+    {"action": "activate_app", "name": "DaVinci Resolve", "settle_ms": 700},
+    {
+      "action": "click_ref",
+      "element_ref": {
+        "role": "AXCheckBox",
+        "title_contains": "edit"
+      }
+    },
+    {"action": "wait", "ms": 1000},
+    {
+      "action": "click_ref",
+      "element_ref": {
+        "role": "AXCheckBox",
+        "title_contains": "media pool"
+      }
+    },
+    {"action": "wait", "ms": 800}
+  ],
+  "return": {"success": true}
+}

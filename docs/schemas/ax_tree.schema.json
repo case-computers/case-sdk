@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://case.dev/schemas/ax_tree.json",
+  "title": "ax_tree_response",
+  "description": "Return value of case_sdk.inspect.app_tree() and case-sdk ax-tree.",
+  "type": "object",
+  "required": ["app", "tree"],
+  "properties": {
+    "app": { "type": "string" },
+    "pid": { "type": ["integer", "null"] },
+    "truncated": { "type": "boolean" },
+    "nodes": { "type": "integer" },
+    "tree": { "$ref": "#/$defs/ax_node" }
+  },
+  "$defs": {
+    "ax_node": {
+      "type": "object",
+      "required": ["role"],
+      "properties": {
+        "role": { "type": "string" },
+        "title": { "type": "string" },
+        "subrole": { "type": "string" },
+        "description": { "type": "string" },
+        "value": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "position": {
+          "type": "object",
+          "properties": { "x": { "type": "integer" }, "y": { "type": "integer" } }
+        },
+        "size": {
+          "type": "object",
+          "properties": {
+            "width": { "type": "integer" },
+            "height": { "type": "integer" }
+          }
+        },
+        "path": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "depth_limit": { "type": "boolean" },
+        "children_omitted": { "type": "integer", "minimum": 0 },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ax_node" }
+        }
+      }
+    }
+  }
+}

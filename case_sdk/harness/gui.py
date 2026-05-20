@@ -198,6 +198,30 @@ def build_default_harness() -> Harness:
         except Exception as exc:
             return {"ok": False, "reason": f"press_failed: {exc}"}
 
+    @h.register_action("click_ref")
+    def click_ref(element_ref: dict[str, Any] | str) -> dict[str, Any]:
+        """Real mouse click at the centre of an AX element (pyautogui).
+
+        Prefer over ``ax_press`` when AXPress silently no-ops (e.g. Resolve
+        page-tab checkboxes). Resolves ``element_ref`` then clicks centre from
+        AXPosition + AXSize.
+        """
+        ref = _resolve_ax_element(element_ref)
+        if ref is None:
+            return {"ok": False, "reason": "unresolved"}
+        pos = _safe_ax_attr(ref, "AXPosition")
+        size = _safe_ax_attr(ref, "AXSize")
+        if pos is None or size is None:
+            return {"ok": False, "reason": "no_position"}
+        try:
+            cx = int(pos.x) + int(size.width) // 2
+            cy = int(pos.y) + int(size.height) // 2
+        except Exception as exc:
+            return {"ok": False, "reason": f"bad_bounds: {exc}"}
+        cx, cy = _clamp_coords(cx, cy)
+        pyautogui.click(x=cx, y=cy)
+        return {"ok": True, "x": cx, "y": cy}
+
     @h.register_action("ax_set_value")
     def ax_set_value(
         element_ref: dict[str, Any] | str, value: str
@@ -272,6 +296,13 @@ def build_default_harness() -> Harness:
 
 
 # ---- AX element resolution -----------------------------------------------
+
+
+def _safe_ax_attr(elem: Any, name: str) -> Any:
+    try:
+        return getattr(elem, name, None)
+    except Exception:
+        return None
 
 
 def _resolve_ax_element(element_ref: Any):
