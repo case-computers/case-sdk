@@ -116,3 +116,35 @@ def test_builtin_append_to_timeline_declares_user_action():
     assert item is not None
     assert item.get("requires_user_action") is True
     assert "Media Pool" in item.get("user_action_prompt", "")
+
+
+def test_symlink_escaping_search_root_is_skipped(tmp_path, monkeypatch):
+    """A symlink whose target lives outside the search root must be rejected."""
+    user_dir = tmp_path / "procedures"
+    user_dir.mkdir()
+    real_target = tmp_path / "outside.json"
+    real_target.write_text(json.dumps({"steps": [{"action": "wait", "ms": 1}]}))
+    symlink = user_dir / "evil.json"
+    symlink.symlink_to(real_target)
+
+    monkeypatch.setenv("CASE_SDK_PROCEDURES_PATH", str(user_dir))
+    with pytest.warns(RuntimeWarning, match="outside search root"):
+        entries = list_procedures()
+    names = {e["name"] for e in entries}
+    assert "evil" not in names
+
+
+def test_user_shadow_of_builtin_emits_warning(tmp_path, monkeypatch):
+    user_dir = tmp_path / "procedures" / "davinci"
+    user_dir.mkdir(parents=True)
+    (user_dir / "focus_resolve.json").write_text(
+        json.dumps({"steps": [{"action": "wait", "ms": 1}]})
+    )
+    monkeypatch.setenv(
+        "CASE_SDK_PROCEDURES_PATH", str(tmp_path / "procedures")
+    )
+    with pytest.warns(RuntimeWarning, match="built-in procedure 'davinci/focus_resolve'"):
+        entries = list_procedures()
+    # User file still wins.
+    match = next(e for e in entries if e["name"] == "davinci/focus_resolve")
+    assert str(tmp_path) in match["path"]

@@ -21,7 +21,7 @@ from case_sdk.discovery import ProcedureNotFound, list_procedures, resolve_proce
 from case_sdk.steps import StepsFormatError, load_steps_file
 from case_sdk.verify import VerifyContext, list_verifiers, run_verify
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # macOS-only — depend on pyautogui / atomacos. Skipped on linux so consumers
 # that only need protocol + steps can import case_sdk cleanly.

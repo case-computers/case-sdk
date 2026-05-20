@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import re
+import warnings
 from pathlib import Path
 from typing import Any, Callable
 
@@ -31,6 +32,29 @@ from case_sdk.verify import VerifyContext, run_verify
 from case_sdk.verify.runner import VerifyError
 
 _PARAM_RE = re.compile(r"\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
+
+# Substrings that mean "AppleScript can run a shell command". Only flagged
+# when a menu_click.script gains them via parameter substitution — built-ins
+# with hardcoded scripts don't trigger the warning.
+_MENU_CLICK_INJECTION_MARKERS = ("do shell script", "`")
+
+
+def _warn_menu_click_injection(
+    step_idx: int, raw_script: str, final_script: str
+) -> None:
+    if raw_script == final_script:
+        return
+    for marker in _MENU_CLICK_INJECTION_MARKERS:
+        if marker in final_script and marker not in raw_script:
+            warnings.warn(
+                f"case-sdk: step {step_idx} menu_click.script gained "
+                f"{marker!r} via ${{}} substitution. AppleScript can run "
+                f"shell commands — if the param value is untrusted this "
+                f"is a script-injection vector.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return
 
 
 class StepsFormatError(ValueError):
@@ -85,10 +109,15 @@ def steps_to_procedure(
 
     def procedure(params: dict[str, Any]) -> Any:
         merged = dict(params)
-        for raw_step in doc["steps"]:
+        for step_idx, raw_step in enumerate(doc["steps"], start=1):
             if not isinstance(raw_step, dict):
                 raise StepsFormatError(f"each step must be an object, got {type(raw_step)}")
             step = substitute_params(raw_step, merged)
+            if step.get("action") == "menu_click":
+                raw_script = raw_step.get("script", "")
+                final_script = step.get("script", "")
+                if isinstance(raw_script, str) and isinstance(final_script, str):
+                    _warn_menu_click_injection(step_idx, raw_script, final_script)
             if "verify" in step:
                 vname = step.pop("verify")
                 if not isinstance(vname, str):

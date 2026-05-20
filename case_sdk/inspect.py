@@ -190,24 +190,83 @@ def _get_app_element(
     return app, _app_meta(app, fallback_name=app_name or "")
 
 
+# Background / overlay services whose localizedName can sneak ahead of the
+# intended target during substring matching. Skipped on the fallback pass so
+# something like `ax-tree TextEdit` doesn't resolve to QuickLookUIService.
+_HELPER_LOCALIZED_NAMES = frozenset(
+    {
+        "QuickLookUIService",
+        "CursorUIViewService",
+        "WindowServer",
+        "Antigravity",
+        "Notification Center",
+        "Spotlight",
+        "UserNotificationCenter",
+        "universalAccessAuthWarn",
+    }
+)
+
+
 def _find_pid_by_name(name: str) -> int | None:
+    """Resolve an app name (or bundle id) to a PID.
+
+    Resolution order:
+      1. exact ``localizedName`` (case-insensitive)
+      2. exact ``bundleIdentifier`` (e.g. ``com.apple.TextEdit``)
+      3. exact ``bundleIdentifier == com.apple.{name}`` shortcut for Apple apps
+      4. substring match on ``localizedName``, excluding known helper /
+         overlay services (longest match wins for disambiguation)
+
+    Returns ``None`` if no app matches.
+    """
     try:
         from AppKit import NSWorkspace  # noqa: WPS433
     except Exception:
         return None
-    needle = name.strip().lower()
-    if not needle:
+    name_clean = (name or "").strip()
+    if not name_clean:
         return None
+    target_lower = name_clean.lower()
+    apple_id = f"com.apple.{name_clean}"
     workspace = NSWorkspace.sharedWorkspace()
-    best_pid: int | None = None
-    best_len = -1
-    for app in workspace.runningApplications():
+    running = list(workspace.runningApplications())
+
+    # Pass 1: exact localizedName (case-insensitive)
+    for app in running:
         try:
             loc = app.localizedName() or ""
         except Exception:
             continue
+        if loc.lower() == target_lower:
+            try:
+                return int(app.processIdentifier())
+            except Exception:
+                continue
+
+    # Pass 2 & 3: exact bundleIdentifier or com.apple.<name>
+    for app in running:
+        try:
+            bid = app.bundleIdentifier() or ""
+        except Exception:
+            continue
+        if bid == name_clean or bid == apple_id:
+            try:
+                return int(app.processIdentifier())
+            except Exception:
+                continue
+
+    # Pass 4: substring fallback (excluding helper services).
+    best_pid: int | None = None
+    best_len = -1
+    for app in running:
+        try:
+            loc = app.localizedName() or ""
+        except Exception:
+            continue
+        if loc in _HELPER_LOCALIZED_NAMES:
+            continue
         loc_l = loc.lower()
-        if needle in loc_l or loc_l in needle:
+        if target_lower in loc_l or loc_l in target_lower:
             if len(loc) > best_len:
                 try:
                     best_pid = int(app.processIdentifier())

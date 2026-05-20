@@ -9,11 +9,23 @@ Search order (first match wins):
 
 Procedure names use forward slashes for nesting, e.g.
 ``davinci/append_to_timeline`` → ``.../davinci/append_to_timeline.json``.
+
+Symlinks inside a search root are followed as long as the resolved target
+stays under the same root. Symlinks whose target escapes the root (e.g.
+``~/.case/procedures/evil -> /etc/passwd``) are skipped with a warning so
+a misplaced symlink can't smuggle arbitrary files into the catalog.
+
+If a user-dir procedure shares the same qualified name as a shipped
+built-in (e.g. ``~/.case/procedures/davinci/foo.json`` and
+``case_sdk/builtin_procedures/davinci/foo.json``), the user file still
+wins (first-match semantics) but a ``RuntimeWarning`` is emitted so an
+accidental shadow does not go unnoticed.
 """
 
 from __future__ import annotations
 
 import os
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -46,16 +58,59 @@ def search_paths() -> list[Path]:
 
 
 def _collect_files() -> list[tuple[str, Path]]:
-    """Return ``(qualified_name, path)``; first search root wins on name clash."""
+    """Return ``(qualified_name, path)``; first search root wins on name clash.
+
+    - Files whose resolved path escapes the search root (symlink hop) are
+      skipped with a ``RuntimeWarning``.
+    - When a built-in name is shadowed by a user-dir file, a single
+      ``RuntimeWarning`` is emitted (the user-dir file still wins).
+    """
     by_name: dict[str, Path] = {}
+    name_origin: dict[str, Path] = {}
+    try:
+        builtin_root: Path | None = _BUILTIN.resolve()
+    except (OSError, RuntimeError):
+        builtin_root = None
+
     for root in search_paths():
+        try:
+            root_resolved = root.resolve()
+        except (OSError, RuntimeError):
+            continue
         for path in sorted(root.rglob("*")):
             if not path.is_file() or path.suffix.lower() not in _PROC_SUFFIXES:
                 continue
+            try:
+                resolved = path.resolve()
+            except (OSError, RuntimeError):
+                continue
+            try:
+                resolved.relative_to(root_resolved)
+            except ValueError:
+                warnings.warn(
+                    f"case-sdk: skipping {path} (resolves outside search "
+                    f"root {root})",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                continue
             rel = path.relative_to(root).with_suffix("")
             key = rel.as_posix()
-            if key not in by_name:
-                by_name[key] = path.resolve()
+            if key in by_name:
+                if (
+                    builtin_root is not None
+                    and root_resolved == builtin_root
+                    and name_origin.get(key) != builtin_root
+                ):
+                    warnings.warn(
+                        f"case-sdk: built-in procedure '{key}' is shadowed "
+                        f"by {by_name[key]}",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                continue
+            by_name[key] = resolved
+            name_origin[key] = root_resolved
     return sorted(by_name.items())
 
 

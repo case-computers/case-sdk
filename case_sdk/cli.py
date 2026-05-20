@@ -165,6 +165,14 @@ def cmd_procedures(args: argparse.Namespace) -> int:
 
 def cmd_init(args: argparse.Namespace) -> int:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    # Restrict the config dir to the current user — config.toml below stores
+    # the API key in plaintext, so it should not be world-readable. chmod on
+    # mkdir is best-effort (no-op on FS without POSIX perms); re-chmod here
+    # in case the dir already existed with looser perms.
+    try:
+        os.chmod(CONFIG_DIR, 0o700)
+    except OSError:
+        pass
     proc_dir = default_procedures_dir()
     proc_dir.mkdir(parents=True, exist_ok=True)
     readme = proc_dir / "README.md"
@@ -201,6 +209,13 @@ def cmd_init(args: argparse.Namespace) -> int:
     if api_base:
         lines.append(f'api_base = "{api_base}"')
     CONFIG_FILE.write_text("\n".join(lines) + "\n")
+    # API key sits in this file in plaintext — keep it owner-read-only so
+    # other processes running as the same user (browser extensions, second
+    # CLI tools) can't grep it.
+    try:
+        os.chmod(CONFIG_FILE, 0o600)
+    except OSError:
+        pass
     print(f"wrote {CONFIG_FILE}")
     return 0
 

@@ -146,11 +146,16 @@ class RemoteDriver(Driver):
         # ping/pong envelopes at the application layer (so a network
         # box can't fake liveness by acking control frames).
         try:
+            # Cap incoming frame size at 1 MB. Defensive against a malicious
+            # or misbehaving server streaming oversized payloads that would
+            # otherwise exhaust client memory. Matches the websockets default
+            # but pinned so a future library default change doesn't relax it.
             ws_ctx = ws_connect(
                 url,
                 additional_headers=headers,
                 ping_interval=None,
                 open_timeout=10,
+                max_size=1_000_000,
             )
         except Exception as e:  # constructor itself rarely raises
             raise _ReconnectableError(e) from e

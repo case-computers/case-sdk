@@ -6,7 +6,46 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
-### Added
+## [0.1.1]
+
+### Fixed
+
+- `case_ax_tree` (and `find_elements` / `case-sdk ax-tree`) no longer
+  resolves to overlay services like `QuickLookUIService` when the caller
+  passes a real app name (e.g. `TextEdit`). Resolution now prefers exact
+  `localizedName`, then `bundleIdentifier`, then `com.apple.<name>`,
+  before falling back to substring matching with a helper-services
+  deny-list.
+
+### Security
+
+- WebSocket frame size pinned to 1 MB explicitly so a misbehaving remote
+  server cannot stream oversized payloads.
+- `case-sdk init` now writes `~/.case-sdk/config.toml` with mode `0600`
+  (and the directory with `0700`) so the API key is not readable by
+  other processes on the same machine.
+- Procedure discovery refuses to follow symlinks whose target escapes
+  the search root (e.g. `~/.case/procedures/x -> /etc/passwd`).
+- `list_procedures()` emits a `RuntimeWarning` when a user-dir procedure
+  shadows a built-in of the same qualified name. First-match precedence
+  is unchanged for 0.1.1.
+- `${param}` substitution into a `menu_click.script` emits a
+  `RuntimeWarning` when it introduces AppleScript shell-exec patterns
+  (`do shell script`, backticks). The step still runs.
+- Passing `db_path` to `davinci.db_*` verify steps is now deprecated and
+  will be removed in 0.2.0. Use `project_hint` or let the heuristic
+  pick the active Project.db.
+- `pydantic` floor lifted to `>=2.4` (CVE-2024-3772).
+- Explicit `Pillow>=11.3` dependency (CVE-2024-28219, CVE-2025-48379).
+- Third-party GitHub Actions in the publish workflow are pinned to
+  commit SHAs instead of mutable tags.
+
+### Docs
+
+- New "Security model" section describing the trust boundary
+  case-sdk exposes (procedures run as the installing user with
+  Accessibility; remote servers receive unconditional trust).
+
 
 - **User-action-required procedures.** JSON procedures may declare
   `requires_user_action: true` plus `user_action_prompt` to signal that the

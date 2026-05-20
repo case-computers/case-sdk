@@ -43,6 +43,16 @@ def test_init_writes_config(isolated_home, capsys):
     assert "wss://example.com" in content
 
 
+def test_init_writes_config_with_owner_only_perms(isolated_home):
+    """Config holds the API key — must not be world-readable."""
+    code = cli.main(["init", "--key", "sk_test", "--api", "wss://example.com"])
+    assert code == 0
+    mode = oct(cli.CONFIG_FILE.stat().st_mode)[-3:]
+    assert mode == "600", f"expected 0600 on config.toml, got {mode}"
+    dir_mode = oct(cli.CONFIG_DIR.stat().st_mode)[-3:]
+    assert dir_mode == "700", f"expected 0700 on config dir, got {dir_mode}"
+
+
 def test_init_without_force_refuses_to_overwrite(isolated_home, capsys):
     cli.CONFIG_DIR.mkdir(parents=True)
     cli.CONFIG_FILE.write_text("[default]\napi_key = \"old\"\n")

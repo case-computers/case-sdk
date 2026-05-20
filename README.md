@@ -272,6 +272,25 @@ def procedure(params):
 
 `ClientError` represents a recoverable harness failure (timeout, primitive raised). Uncaught exceptions and re-raised `ClientError`s surface to the caller of `Runtime.execute*` as `ProcedureError`.
 
+## Security model
+
+case-sdk is a desktop automation runtime. Once Accessibility is granted, a procedure can do anything the user can — and that is the design, not a leak.
+
+- **Local `.py` procedures execute arbitrary Python** at the installing user's privilege. Treat them like shell scripts.
+- **JSON procedures are not a sandbox.** They reach every harness primitive (`click`, `type`, `menu_click`, `ax_set_value`, `hotkey`, `screenshot`, ...). A JSON procedure can do anything a Python procedure can short of `import`.
+- **`menu_click` runs AppleScript**, which can in turn run shell commands. Treat the `script` field as shell-equivalent.
+- **Remote mode (`--key` / `Runtime(api_key=...)`) trusts the server unconditionally.** Whatever WebSocket server you point case-sdk at can stream any action — clicks, keystrokes, screenshot requests — to your machine. Only connect to servers you control or pay for.
+- **The `screenshot` sensor captures the entire screen by default.** A procedure or server requesting it can see whatever is on your display.
+
+Practical guidance:
+
+- Only run procedures you wrote or trust.
+- Keep `~/.case/procedures/` to yourself (`chmod 700`). Anyone with write access there can drive your apps.
+- Don't paste secrets into procedure params if the procedure may forward them anywhere.
+- Grant Accessibility only while you're actively using case-sdk; revoke when done.
+
+case-sdk is built for trusted automation flows. It is not built to sandbox untrusted code.
+
 ## License
 
 Elastic License 2.0 (ELv2). Source-available. You may use, modify, and self-host case-sdk freely. You may not provide it to third parties as a hosted or managed service. See `LICENSE` for the full text.
