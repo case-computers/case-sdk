@@ -1,10 +1,9 @@
 """Minimal FastAPI+WS mock server for verifying RemoteDriver.
 
 This is a *test-only* server. It hosts a single hard-coded procedure
-(`save_textedit`) and walks its generator over a WebSocket, exactly as
-case-api will do in production. The goal is to give RemoteDriver
-something realistic to talk to without depending on the closed-source
-case-api repo.
+(`save_textedit`) and walks its generator over a WebSocket, the same shape
+a production server would use. Gives RemoteDriver something realistic to
+talk to without depending on a real server.
 
 Run standalone:
     python tests/mock_server.py [--port 8000] [--ping-interval 20]
@@ -127,8 +126,8 @@ def build_app(
 
 # ---- Per-session driver -------------------------------------------------
 # Owns the procedure generator, the step counter, and the keepalive loop.
-# Anything more complex (multi-procedure, retry, etc.) lives in case-api,
-# not here.
+# Anything more complex (multi-procedure, retry, etc.) belongs in a real
+# server, not here.
 
 
 async def _run_session(
@@ -285,7 +284,7 @@ async def _run_session(
             if not ok:
                 # Client reported its harness failed. For the mock, we
                 # surface that back to the generator via gen.throw — this
-                # mirrors what case-api will do.
+                # mirrors what a production server would do.
                 err = result_env.payload.get("error", "client harness failure")
                 try:
                     yielded = gen.throw(Exception(err))

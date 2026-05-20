@@ -1,10 +1,10 @@
-"""RemoteDriver — streams a procedure from a case-api server over WebSocket.
+"""RemoteDriver — streams a procedure from a remote server over WebSocket.
 
-Mode B path: procedure source lives on the server, never on the client's
-disk. The client opens a WS, says hello with a procedure name, and the
-server walks its own copy of the generator. Each yield becomes an
-`action` (or `sensor`) envelope; the client runs it through its local
-harness and replies with a `result` envelope carrying the observation.
+Procedure source lives on the server, never on the client's disk. The
+client opens a WS, says hello with a procedure name, and the server walks
+its own copy of the generator. Each yield becomes an `action` (or
+`sensor`) envelope; the client runs it through its local harness and
+replies with a `result` envelope carrying the observation.
 
 The driver is intentionally chatty rather than smart — almost all
 intelligence lives on the server. The client's job is:
@@ -47,14 +47,14 @@ RECONNECT_BACKOFF = (1.0, 2.0, 4.0, 8.0, 30.0)
 
 
 class RemoteDriver(Driver):
-    """Drives a procedure that lives on a remote case-api server.
+    """Drives a procedure that lives on a remote server.
 
     Args:
         harness: local action/sensor implementations to dispatch into.
         api_base: the WS base URL (path `/ws` is appended). e.g.
             "ws://localhost:8000". Trailing /ws is allowed.
         api_key: bearer token sent on the WS upgrade. Empty string means
-            no Authorization header which will be rejected by case-api.
+            no Authorization header which will be rejected by the server.
         step_timeout: max seconds to wait for a result-message turnaround
             on a single step before raising ClientError("E_TIMEOUT").
         max_reconnects: how many times to retry after a transport drop.
@@ -142,7 +142,7 @@ class RemoteDriver(Driver):
         # the docstring on _run() above.
         step_cache: dict[int, dict[str, Any]] = {}
 
-        # Disable websockets' built-in ping logic; the case protocol uses
+        # Disable websockets' built-in ping logic; this protocol uses
         # ping/pong envelopes at the application layer (so a network
         # box can't fake liveness by acking control frames).
         try:

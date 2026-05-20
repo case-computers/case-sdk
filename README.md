@@ -3,11 +3,11 @@
 Dual-mode runtime for desktop GUI automation on macOS.
 
 - **Local mode** — write your own procedures in Python and run them on your machine.
-- **Remote mode** — with an API key, stream verified procedures from the case-api server. The procedure source never lands on the client's disk.
+- **Remote mode** — with an API key, stream procedures from a remote WebSocket server. The procedure source never lands on the client's disk.
 
 Both modes share the same `Runtime` API.
 
-**Developers:** see [docs/DEVELOPER.md](docs/DEVELOPER.md) for API contracts, JSON schemas (`docs/schemas/`), procedure authoring, and MCP vs the `davinci-demo` branch.
+**Developers:** see [docs/DEVELOPER.md](docs/DEVELOPER.md) for API contracts, JSON schemas (`docs/schemas/`), procedure authoring, and MCP.
 
 ## Install
 
@@ -213,7 +213,7 @@ claude mcp add case-sdk -- python -m case_mcp.server
 Example agent flow: `case_list_procedures` → `case_focus_app("DaVinci Resolve")` →
 `case_run("davinci/import_and_append", {"filepath": "/abs/path/clip.mov"})`.
 
-Remote streaming procedures (case-api) remain CLI-only for now (`case-sdk run` with `--key`).
+Remote streaming procedures remain CLI-only for now (`case-sdk run` with `--key`).
 
 ## Error handling
 

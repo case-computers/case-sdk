@@ -1,12 +1,13 @@
 """Runtime — the public API.
 
 Two modes:
-  - ``rt.execute_file(path, **params)`` — Mode A, runs a local procedure file.
-  - ``rt.execute(name, **params)``      — Mode B, streams from the case-api
-                                          server (requires ``api_key``).
+  - ``rt.execute_file(path, **params)`` — runs a local procedure file.
+  - ``rt.execute(name, **params)``      — streams a procedure from a
+                                          remote WebSocket server
+                                          (requires ``api_key``).
 
-The constructor's ``api_key`` decides whether Mode B is available. Both
-modes share the same ``Harness`` instance so the same set of action /
+The constructor's ``api_key`` decides whether remote mode is available.
+Both modes share the same ``Harness`` instance so the same set of action /
 sensor primitives is dispatched regardless of where the procedure lives.
 """
 
@@ -93,7 +94,7 @@ class Runtime:
         return self.local_driver.execute(module.procedure, params)
 
     def execute(self, procedure_name: str, **params: Any) -> dict[str, Any]:
-        """Run a named procedure on the case-api server. Requires api_key."""
+        """Run a named procedure on a remote WebSocket server. Requires api_key."""
         if self.remote_driver is None:
             raise RuntimeError(
                 "execute() requires api_key; use execute_file() for local procedures"

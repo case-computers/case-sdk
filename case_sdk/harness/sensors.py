@@ -30,7 +30,7 @@ from case_sdk.harness.executor import Harness
 
 
 # 8 KB inline payload ceiling. See protocol doc — anything bigger should
-# eventually move to a blob URL handled by ``case-api``. Out of scope here.
+# eventually move to a blob URL handled server-side. Out of scope here.
 INLINE_BYTE_LIMIT = 8 * 1024
 
 # Frontmost-app names whose value is misleading (matches EH world_model).
@@ -175,7 +175,7 @@ def _capture_screenshot(region: dict[str, Any] | None) -> dict[str, Any]:
 
     Enforces ``INLINE_BYTE_LIMIT``. If the encoded PNG exceeds the limit we
     skip base64 entirely and return ``{"value": "TOO_LARGE", "bytes": N}``.
-    The blob-URL story for oversize payloads lives in case-api.
+    The blob-URL story for oversize payloads is a server-side concern.
     """
     if region is not None:
         x = int(region.get("x", 0))
