@@ -27,7 +27,7 @@ import warnings
 from pathlib import Path
 from typing import Any, Callable
 
-from case_sdk.protocol import Action, ClientError, Sensor
+from case_sdk.protocol import Action, ClientError, Sensor, Verify
 from case_sdk.verify import VerifyContext, run_verify
 from case_sdk.verify.runner import VerifyError
 
@@ -99,12 +99,26 @@ def steps_to_procedure(
     doc: dict[str, Any],
     *,
     verify_mode: str = "soft",
+    verify_dispatch: str = "inline",
 ) -> Callable[[dict[str, Any]], Any]:
-    """Build a ``procedure(params)`` callable from a step document."""
+    """Build a ``procedure(params)`` callable from a step document.
+
+    ``verify_dispatch`` controls where verify steps execute:
+    - ``"inline"`` (default) — runs ``case_sdk.verify.run_verify`` in the
+      same process. Used for local procedures on the user's Mac.
+    - ``"yield"`` — yields ``Verify(name, **args)`` so the driver can ship
+      it over the wire. Used by case-api server-side execution so verify
+      steps run against the user's local state (their Project.db, etc.)
+      instead of the server's filesystem.
+    """
 
     mode = str(doc.get("verify_mode", verify_mode))
     if mode not in ("soft", "hard"):
         raise StepsFormatError(f"verify_mode must be 'soft' or 'hard', got {mode!r}")
+    if verify_dispatch not in ("inline", "yield"):
+        raise StepsFormatError(
+            f"verify_dispatch must be 'inline' or 'yield', got {verify_dispatch!r}"
+        )
     verify_ctx = VerifyContext(mode=mode)  # type: ignore[arg-type]
 
     def procedure(params: dict[str, Any]) -> Any:
@@ -122,6 +136,17 @@ def steps_to_procedure(
                 vname = step.pop("verify")
                 if not isinstance(vname, str):
                     raise StepsFormatError("verify name must be a string")
+                if verify_dispatch == "yield":
+                    observation = yield Verify(vname, **step)
+                    obs = observation if isinstance(observation, dict) else {}
+                    ok = bool(obs.get("ok", True))
+                    verify_ctx.record_result(vname, ok, obs)
+                    if not ok and verify_ctx.mode == "hard":
+                        msg = (
+                            obs.get("reason") or obs.get("message") or f"verify {vname} failed"
+                        )
+                        raise ClientError(msg, code="E_VERIFY")
+                    continue
                 try:
                     run_verify(vname, step, verify_ctx)
                 except ClientError:

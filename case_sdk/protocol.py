@@ -25,6 +25,7 @@ MessageType = Literal[
     "hello",
     "action",
     "sensor",
+    "verify",
     "result",
     "error",
     "done",
@@ -68,6 +69,25 @@ class Sensor:
 
     def __repr__(self) -> str:
         return f"Sensor({self.name!r}, args={self.args!r})"
+
+
+class Verify:
+    """A verify check the client should run locally (DaVinci sqlite, etc.).
+
+    Like Sensor but routed through ``case_sdk.verify.run_verify`` on the
+    client rather than the harness. Server-side procedures yield this when
+    ``verify_dispatch="yield"`` so verify steps run against the user's local
+    state (their DaVinci Project.db, etc.) instead of the server's filesystem.
+    """
+
+    __slots__ = ("name", "args")
+
+    def __init__(self, _verify_name: str, /, **args: Any) -> None:
+        self.name = _verify_name
+        self.args = args
+
+    def __repr__(self) -> str:
+        return f"Verify({self.name!r}, args={self.args!r})"
 
 
 @dataclass
@@ -139,6 +159,22 @@ def sensor_msg(
 ) -> Envelope:
     return Envelope(
         type="sensor",
+        session_id=session_id,
+        step_id=step_id,
+        payload={"name": name, "args": args or {}},
+    )
+
+
+def verify_msg(
+    name: str,
+    args: dict[str, Any] | None = None,
+    *,
+    session_id: str = "",
+    step_id: int = 0,
+) -> Envelope:
+    """Server → client: run this verifier locally and reply with the result."""
+    return Envelope(
+        type="verify",
         session_id=session_id,
         step_id=step_id,
         payload={"name": name, "args": args or {}},
