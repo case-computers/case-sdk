@@ -11,13 +11,17 @@ Both modes share the same `Runtime` API.
 
 ## Install
 
-From source (until the package is on PyPI):
+```bash
+pip install case-sdk              # CLI + Python API
+pip install "case-sdk[mcp]"       # add the MCP server for Claude Code / agents
+```
+
+From source (for contributors):
 
 ```bash
 git clone https://github.com/daemonlabshq/case-sdk
 cd case-sdk
-pip install -e .
-pip install -e ".[mcp]"    # optional: MCP server for Claude Code / agents
+pip install -e ".[dev,mcp]"
 ```
 
 Grant Accessibility in *System Settings → Privacy & Security → Accessibility*. Then run `case-sdk doctor` to verify.
