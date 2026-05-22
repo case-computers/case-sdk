@@ -6,6 +6,25 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [0.1.2]
+
+### Added
+
+- Internal harness extension namespace (`case_sdk.apps`) for app-specific
+  bundles. Bundles attach to `build_default_harness()` under
+  `try/except ImportError` so non-macOS consumers keep working unchanged.
+- `element_ref` resolution now accepts optional `description` and
+  `description_contains` keys for matching by ``AXDescription``. Useful for
+  icon-only buttons whose `AXTitle` is empty.
+
+### Fixed
+
+- `_run_verify_safe` in the remote driver now catches every exception class
+  (not just `VerifyError`) and surfaces them as `{ok: false, reason: ...}`
+  so a missing local prerequisite (e.g. ``FileNotFoundError`` from
+  `davinci.db_*` on a Mac without DaVinci installed) no longer crashes the
+  client mid-procedure.
+
 ## [0.1.1]
 
 ### Fixed

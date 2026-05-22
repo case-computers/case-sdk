@@ -327,9 +327,14 @@ class _ReconnectableError(Exception):
 def _run_verify_safe(
     name: str, args: dict[str, Any], ctx: VerifyContext
 ) -> dict[str, Any]:
-    """Wrap run_verify so VerifyError / unknown-name surface as a result dict
-    rather than crashing the dispatch — the server then decides soft/hard."""
+    """Wrap run_verify so any failure surfaces as ``{"ok": False, "reason": ...}``
+    rather than crashing the dispatch — the server's generator then decides
+    soft (log + continue) vs hard (raise ClientError) handling. Includes
+    non-VerifyError exceptions (e.g. FileNotFoundError when DaVinci isn't
+    installed or sqlite path doesn't exist on this Mac)."""
     try:
         return run_verify(name, args, ctx)
     except VerifyError as e:
         return {"ok": False, "reason": str(e)}
+    except Exception as e:
+        return {"ok": False, "reason": f"{type(e).__name__}: {e}"}

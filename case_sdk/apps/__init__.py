@@ -1,1 +1,1 @@
-"""App-specific adapters (DaVinci Resolve, etc.)."""
+"""App-specific adapters."""

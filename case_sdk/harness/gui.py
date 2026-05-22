@@ -291,6 +291,13 @@ def build_default_harness() -> Harness:
 
     _sensors.register_default_sensors(h)
 
+    try:
+        from case_sdk.apps import davinci as _davinci
+
+        _davinci.register(h)
+    except ImportError:
+        pass
+
     return h
 
 
