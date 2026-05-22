@@ -37,6 +37,8 @@ from case_sdk.protocol import (
     pong_msg,
     result_msg,
 )
+from case_sdk.verify import VerifyContext
+from case_sdk.verify.runner import VerifyError, run_verify
 
 # Defaults match the plan: 30s per-step deadline, 5 attempts at backoff
 # 1/2/4/8/30s. Constructor kwargs override; env vars override those for
@@ -142,6 +144,13 @@ class RemoteDriver(Driver):
         # the docstring on _run() above.
         step_cache: dict[int, dict[str, Any]] = {}
 
+        # Per-session VerifyContext. Server-side verify steps (db_snapshot →
+        # db_delta) need state to flow across the run (e.g. baseline lookup
+        # by name). Mode is best-effort "soft" client-side; the server's
+        # generator handles hard-mode by raising ClientError, which we
+        # surface via an error envelope.
+        verify_ctx = VerifyContext(mode="soft")
+
         # Disable websockets' built-in ping logic; this protocol uses
         # ping/pong envelopes at the application layer (so a network
         # box can't fake liveness by acking control frames).
@@ -206,7 +215,7 @@ class RemoteDriver(Driver):
                         msg = env.payload.get("message", "remote procedure error")
                         raise ProcedureError(msg, code=code)
 
-                    if env.type in ("action", "sensor"):
+                    if env.type in ("action", "sensor", "verify"):
                         cached = step_cache.get(env.step_id)
                         if cached is not None:
                             # P11: replay of a step we've already
@@ -225,7 +234,7 @@ class RemoteDriver(Driver):
                             )
                             continue
 
-                        result_payload = await self._dispatch_step(env)
+                        result_payload = await self._dispatch_step(env, verify_ctx)
                         step_cache[env.step_id] = result_payload
                         await ws.send(
                             result_msg(
@@ -259,8 +268,10 @@ class RemoteDriver(Driver):
         except (ConnectionClosed, WebSocketException, OSError) as e:
             raise _ReconnectableError(e) from e
 
-    async def _dispatch_step(self, env: Envelope) -> dict[str, Any]:
-        """Run one harness call. Translates exceptions to result payloads.
+    async def _dispatch_step(
+        self, env: Envelope, verify_ctx: VerifyContext
+    ) -> dict[str, Any]:
+        """Run one harness / verifier call. Translates exceptions to result payloads.
 
         Returns a dict with at least an `ok` bool, plus either
         `observation` or `error`. Caller stuffs that into a result
@@ -270,15 +281,21 @@ class RemoteDriver(Driver):
         args = env.payload.get("args", {})
 
         async def _call() -> dict[str, Any]:
-            # Harness primitives are sync (pyautogui calls etc.). Run on
-            # a worker thread so they don't block the event loop.
+            # All primitives are sync (pyautogui calls, sqlite reads).
+            # Run on a worker thread so they don't block the event loop.
             if env.type == "action":
                 return await asyncio.to_thread(
                     self.harness.execute_action, name, args
                 )
-            return await asyncio.to_thread(
-                self.harness.execute_sensor, name, args
-            )
+            if env.type == "sensor":
+                return await asyncio.to_thread(
+                    self.harness.execute_sensor, name, args
+                )
+            # env.type == "verify" — run the local verifier framework.
+            # run_verify returns a dict like {"ok": True, ...} or {"ok": False,
+            # "reason": "..."}. Pass it through unchanged; the server side
+            # decides soft vs hard handling.
+            return await asyncio.to_thread(_run_verify_safe, name, args, verify_ctx)
 
         try:
             observation = await asyncio.wait_for(_call(), timeout=self.step_timeout)
@@ -305,3 +322,19 @@ class _ReconnectableError(Exception):
     def __init__(self, cause: Exception) -> None:
         super().__init__(str(cause))
         self.cause = cause
+
+
+def _run_verify_safe(
+    name: str, args: dict[str, Any], ctx: VerifyContext
+) -> dict[str, Any]:
+    """Wrap run_verify so any failure surfaces as ``{"ok": False, "reason": ...}``
+    rather than crashing the dispatch — the server's generator then decides
+    soft (log + continue) vs hard (raise ClientError) handling. Includes
+    non-VerifyError exceptions (e.g. FileNotFoundError when DaVinci isn't
+    installed or sqlite path doesn't exist on this Mac)."""
+    try:
+        return run_verify(name, args, ctx)
+    except VerifyError as e:
+        return {"ok": False, "reason": str(e)}
+    except Exception as e:
+        return {"ok": False, "reason": f"{type(e).__name__}: {e}"}

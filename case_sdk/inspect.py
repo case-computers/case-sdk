@@ -120,6 +120,8 @@ def resolve_element_ref(element_ref: dict[str, Any] | str | None) -> Any:
     role = element_ref.get("role")
     title = element_ref.get("title")
     title_contains = element_ref.get("title_contains")
+    description = element_ref.get("description")
+    description_contains = element_ref.get("description_contains")
     value = element_ref.get("value")
 
     try:
@@ -133,12 +135,22 @@ def resolve_element_ref(element_ref: dict[str, Any] | str | None) -> Any:
     if path is not None:
         return _resolve_by_path(root, path)
 
-    if not (role or title or value):
+    if not (role or title or value or description or description_contains):
         return None
 
     if title_contains is not None:
         return _walk_for_title_contains(
             root, role=role, title_contains=str(title_contains), depth=0
+        )
+    if description_contains is not None or description is not None:
+        return _walk_for_description(
+            root,
+            role=role,
+            description=str(description) if description is not None else None,
+            description_contains=(
+                str(description_contains) if description_contains is not None else None
+            ),
+            depth=0,
         )
     return _walk_for_match(root, role=role, title=title, value=value, depth=0)
 
@@ -503,6 +515,42 @@ def _walk_for_title_contains(
     for child in _safe_children(elem):
         match = _walk_for_title_contains(
             child, role=role, title_contains=title_contains, depth=depth + 1
+        )
+        if match is not None:
+            return match
+    return None
+
+
+def _walk_for_description(
+    elem: Any,
+    *,
+    role: str | None,
+    description: str | None,
+    description_contains: str | None,
+    depth: int,
+) -> Any | None:
+    """Find by AXDescription (exact or substring). Resolve uses AXDescription
+    instead of AXTitle for icon-only buttons like 'Reset All' / 'Auto Balance'
+    / per-wheel 'Reset' — title is empty, the human label is the description.
+    """
+    if depth > 24:
+        return None
+    elem_role = _safe_attr(elem, "AXRole")
+    if not role or elem_role == role:
+        elem_desc = _safe_attr(elem, "AXDescription")
+        if elem_desc is not None:
+            ds = str(elem_desc)
+            if description is not None and ds == description:
+                return elem
+            if description_contains is not None and description_contains.lower() in ds.lower():
+                return elem
+    for child in _safe_children(elem):
+        match = _walk_for_description(
+            child,
+            role=role,
+            description=description,
+            description_contains=description_contains,
+            depth=depth + 1,
         )
         if match is not None:
             return match
