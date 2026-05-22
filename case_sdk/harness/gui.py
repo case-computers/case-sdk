@@ -1,17 +1,14 @@
 """GUI harness — concrete implementations of action primitives.
 
-P2 shipped one primitive: ``open_app``. P3 fills in the full pyautogui + AX set.
-Everything LLM-related (action schemas, element formatting, vision-server /
-`/state`, browser CDP launch, ReAct find_element, prompt supplements) is
-intentionally NOT included here — that lives on the server side.
-
-All registered functions take only the kwargs that appear on the wire (see
-``case_sdk.protocol``). Names of params must match the protocol exactly because
+Registered functions take only the kwargs that appear on the wire
+(see ``case_sdk.protocol``). Names must match the protocol exactly because
 the executor invokes them via ``fn(**args)``.
 """
 
 from __future__ import annotations
 
+import logging
+import os
 import subprocess
 import time
 from typing import Any
@@ -19,6 +16,23 @@ from typing import Any
 import pyautogui
 
 from case_sdk.harness.executor import Harness
+
+log = logging.getLogger("case_sdk.harness.gui")
+
+
+def _escape_applescript_string(s: str) -> str:
+    """Escape ``s`` for safe interpolation into a double-quoted AppleScript literal.
+
+    Without this, an app name like ``Foo" & (do shell script "rm -rf ~") & "``
+    interpolated into ``tell application "..."`` lets a malicious server (or any
+    untrusted caller) execute arbitrary shell as the current user.
+    """
+    return (
+        s.replace("\\", "\\\\")
+         .replace('"', '\\"')
+         .replace("\n", " ")
+         .replace("\r", " ")
+    )
 
 
 # ---- Coordinate helpers --------------------------------------------------
@@ -81,12 +95,15 @@ def build_default_harness() -> Harness:
 
     @h.register_action("activate_app")
     def activate_app(name: str, settle_ms: int = 700) -> dict[str, Any]:
-        """Bring an already-running app forward (osascript ``activate``)."""
+        """Bring an already-running app forward (osascript ``activate``).
+
+        The ``name`` is escaped before interpolation into the AppleScript literal.
+        """
         subprocess.run(
             [
                 "osascript",
                 "-e",
-                f'tell application "{name}" to activate',
+                f'tell application "{_escape_applescript_string(str(name))}" to activate',
             ],
             check=False,
             capture_output=True,
@@ -96,11 +113,16 @@ def build_default_harness() -> Harness:
 
     @h.register_action("menu_click")
     def menu_click(script: str, timeout: float = 5.0) -> dict[str, Any]:
-        """Run an AppleScript snippet that clicks a menu item via System Events.
+        """DISABLED BY DEFAULT — set ``CASE_SDK_ALLOW_MENU_CLICK=1`` to enable.
 
-        Prefer this over hotkeys when macOS swallows function keys or focus is
-        unreliable. The script should target ``process "App Name"`` menus.
+        The ``script`` arg goes verbatim to ``osascript`` which supports
+        ``do shell script`` → arbitrary code execution. Use only with trusted
+        procedure sources. Prefer this over hotkeys when macOS swallows
+        function keys or focus is unreliable; the script should target
+        ``process "App Name"`` menus.
         """
+        if os.environ.get("CASE_SDK_ALLOW_MENU_CLICK", "").strip() != "1":
+            return {"ok": False, "reason": "menu_click disabled — set CASE_SDK_ALLOW_MENU_CLICK=1 to enable (AppleScript can shell-exec on macOS)"}
         try:
             subprocess.run(
                 ["osascript", "-e", script],

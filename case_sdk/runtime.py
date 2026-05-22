@@ -1,14 +1,8 @@
 """Runtime — the public API.
 
-Two modes:
-  - ``rt.execute_file(path, **params)`` — runs a local procedure file.
-  - ``rt.execute(name, **params)``      — streams a procedure from a
-                                          remote WebSocket server
-                                          (requires ``api_key``).
-
-The constructor's ``api_key`` decides whether remote mode is available.
-Both modes share the same ``Harness`` instance so the same set of action /
-sensor primitives is dispatched regardless of where the procedure lives.
+Two modes share one ``Harness`` so primitives dispatch the same way:
+  - ``rt.execute_file(path, **params)`` — local procedure file or name.
+  - ``rt.execute(name, **params)``      — remote WS procedure (needs ``api_key``).
 """
 
 from __future__ import annotations
@@ -31,11 +25,6 @@ def enrich_params(params: dict[str, Any]) -> dict[str, Any]:
     out = dict(params)
     if "filepath" in out and "clip_basename" not in out:
         out["clip_basename"] = os.path.basename(str(out["filepath"]))
-    if "page" in out and "page_title" not in out:
-        # Resolve page tabs match AXCheckBox title case-insensitively; common
-        # titles are Title Case ("Edit", "Media Pool").
-        page = str(out["page"]).strip()
-        out["page_title"] = page[:1].upper() + page[1:] if page else page
     return out
 
 
@@ -44,7 +33,7 @@ class Runtime:
         self,
         *,
         api_key: str | None = None,
-        api_base: str = "ws://localhost:8000",
+        api_base: str = "wss://api.daemonlabs.run",
         harness: Harness | None = None,
         verify_mode: Literal["soft", "hard"] | None = None,
     ) -> None:
@@ -64,12 +53,20 @@ class Runtime:
             else None
         )
 
-    def execute_file(self, path: str | Path, **params: Any) -> dict[str, Any]:
+    def execute_file(
+        self,
+        path: str | Path,
+        *,
+        allow_arbitrary: bool = False,
+        **params: Any,
+    ) -> dict[str, Any]:
         """Run a local procedure file or discovered name. No API key required."""
         params = enrich_params(params)
         try:
-            resolved = resolve_procedure(str(path))
+            resolved = resolve_procedure(str(path), allow_arbitrary=allow_arbitrary)
         except ProcedureNotFound:
+            if not allow_arbitrary:
+                raise
             resolved = Path(path).resolve()
             if not resolved.exists():
                 raise

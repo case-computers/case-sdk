@@ -1,20 +1,23 @@
 """case-sdk command-line interface.
 
 Subcommands:
-  - ``run <path-or-name>``  execute a .py or .json procedure (Mode A) or remote name
-  - ``ax-tree [app]``       dump AX tree or search for element refs
-  - ``init``                write ``~/.case-sdk/config.toml``
-  - ``doctor``              check perms, config, basic readiness
+  - ``run <target>``     execute a procedure
+  - ``procedures``       list discoverable local procedures
+  - ``ax-tree [app]``    dump AX tree or search for element refs
+  - ``init``             write ``~/.case-sdk/config.toml``
+  - ``doctor``           check perms, config, basic readiness
 
-Mode A vs Mode B is decided by whether ``target`` resolves to an existing
-file on disk — keeps the CLI ergonomic for both flows without a flag.
+``run`` accepts a file path for local procedures, a discovered name, or a
+remote procedure name (requires ``--key``).
 """
 
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -35,6 +38,9 @@ from case_sdk.perms import missing, print_onboarding_banner
 
 CONFIG_DIR = Path.home() / ".case-sdk"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
+
+_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+_API_BASE_RE = re.compile(r"^[A-Za-z0-9:/.\-_]+$")
 
 
 def load_config() -> dict[str, Any]:
@@ -83,7 +89,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     api_base = (
         args.api
         or os.environ.get("CASE_SDK_API_BASE")
-        or cfg.get("api_base", "ws://localhost:8000")
+        or cfg.get("api_base", "wss://api.daemonlabs.run")
     )
 
     params: dict[str, Any] = {}
@@ -101,6 +107,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         verify_mode=args.verify_mode or None,
     )
 
+    allow_arbitrary = bool(getattr(args, "allow_arbitrary_py", False))
+
     # Local: explicit file path, or a name resolved via procedure discovery.
     resolved_path: Path | None = None
     if target_path.is_file():
@@ -109,7 +117,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         try:
             from case_sdk.discovery import resolve_procedure
 
-            resolved_path = resolve_procedure(args.target)
+            resolved_path = resolve_procedure(
+                args.target, allow_arbitrary=allow_arbitrary
+            )
         except ProcedureNotFound:
             resolved_path = None
 
@@ -121,7 +131,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         if _maybe_user_action_prompt(resolved_path, args.yes) != 0:
             return 130
         try:
-            result = rt.execute_file(args.target, **params)
+            result = rt.execute_file(
+                args.target, allow_arbitrary=allow_arbitrary, **params
+            )
         except Exception as e:
             print(f"error: {type(e).__name__}: {e}", file=sys.stderr)
             return 1
@@ -197,11 +209,18 @@ def cmd_init(args: argparse.Namespace) -> int:
     api_key = args.key
     if api_key is None:
         try:
-            api_key = input("API key (blank for local-only mode): ").strip()
+            api_key = getpass.getpass("API key (blank for local-only mode): ").strip()
         except EOFError:
             api_key = ""
 
     api_base = args.api or ""
+
+    if api_key and not _KEY_RE.fullmatch(api_key):
+        print("error: invalid characters in API key", file=sys.stderr)
+        return 2
+    if api_base and not _API_BASE_RE.fullmatch(api_base):
+        print("error: invalid characters in api_base", file=sys.stderr)
+        return 2
 
     lines = ["[default]"]
     if api_key:
@@ -283,7 +302,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"  api_base: {cfg.get('api_base', '(not set)')}")
         print(f"  api_key:  {'set' if cfg.get('api_key') else 'not set'}")
     else:
-        print(f"  no config — run `case-sdk init`")
+        print("  no config — run `case-sdk init`")
 
     return 1 if missing_perms else 0
 
@@ -331,6 +350,11 @@ def main(argv: list[str] | None = None) -> int:
         "-y",
         action="store_true",
         help="skip the user-action prompt for procedures that declare requires_user_action",
+    )
+    p_run.add_argument(
+        "--allow-arbitrary-py",
+        action="store_true",
+        help="run procedure files outside the configured search roots (off by default)",
     )
     p_run.set_defaults(func=cmd_run)
 
