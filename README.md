@@ -69,13 +69,9 @@ Or from the shell:
 case-sdk run my_proc.py
 ```
 
-## Run a remote procedure (BYO server / managed case-api coming)
+## Run a remote procedure
 
-case-sdk speaks a WebSocket envelope protocol (see `case_sdk.protocol`) so a
-server can hold a procedure and stream one step at a time while the client
-harness executes it locally. You bring your own server today; the managed
-**case-api** service is in active development and will be the default hosted
-backend.
+case-api is live at `wss://api.daemonlabs.run`. Get a key at https://daemonlabs.run/pricing. case-sdk speaks a WebSocket envelope protocol (see `case_sdk.protocol`) so the server holds a procedure and streams one step at a time while the client harness executes it locally. To run against your own backend instead, point `api_base` at it.
 
 ```python
 from case_sdk import Runtime
@@ -92,8 +88,7 @@ case-sdk run add_clip_to_timeline --param filepath=/x.mov
 
 In remote mode the server holds the procedure. The runtime receives one
 action at a time over WebSocket, runs it locally, returns the observation,
-and waits for the next instruction. Procedure source never lands on the
-client's disk.
+and waits for the next instruction.
 
 ## Built-in primitives
 
@@ -153,7 +148,7 @@ Built-in verifiers:
 case-sdk verify-list
 ```
 
-## Procedure discovery (Phase 0)
+## Procedure discovery
 
 Built-in DaVinci procedures ship with the package. Override or add your own under
 ``~/.case/procedures/`` (created by ``case-sdk init``).
@@ -169,7 +164,13 @@ Search path (first match wins): ``$CASE_SDK_PROCEDURES_PATH`` → ``~/.case/proc
 | Built-in name | Purpose |
 |---------------|---------|
 | `davinci/focus_resolve` | Activate DaVinci |
-| `davinci/go_to_page` | Switch page tab (`--param page=edit`) |
+| `davinci/nav/go_to_media_page` | Switch to the Media page (Shift+2) |
+| `davinci/nav/go_to_cut_page` | Switch to the Cut page (Shift+3) |
+| `davinci/nav/go_to_edit_page` | Switch to the Edit page (Shift+4) |
+| `davinci/nav/go_to_fusion_page` | Switch to the Fusion page (Shift+5) |
+| `davinci/nav/go_to_color_page` | Switch to the Color page (Shift+6) |
+| `davinci/nav/go_to_fairlight_page` | Switch to the Fairlight (audio) page (Shift+7) |
+| `davinci/nav/go_to_deliver_page` | Switch to the Deliver page (Shift+8) |
 | `davinci/open_media_pool` | Edit page + open Media Pool panel |
 | `davinci/import_media` | Import one file (`filepath`, auto `clip_basename`) |
 | `davinci/import_media_on_edit` | Go to Edit, then import (`filepath`) |
@@ -208,7 +209,15 @@ case-sdk doctor
 case-sdk --version
 ```
 
-Configuration resolves in order: CLI flag → environment (`CASE_SDK_API_KEY`, `CASE_SDK_API_BASE`) → `~/.case-sdk/config.toml`.
+Configuration resolves in order: CLI flag → environment (`CASE_SDK_API_KEY`, `CASE_SDK_API_BASE`) → `~/.case-sdk/config.toml` → built-in default (`wss://api.daemonlabs.run`).
+
+For local mock-server dev, override the default:
+
+```bash
+export CASE_SDK_API_BASE=ws://localhost:8000
+# or
+case-sdk run my/proc --api ws://localhost:8000
+```
 
 ## MCP (agents — Claude Code, etc.)
 
@@ -239,24 +248,9 @@ Example agent flow: `case_list_procedures` → `case_focus_app("DaVinci Resolve"
 
 Remote streaming procedures remain CLI-only for now (`case-sdk run` with `--key`).
 
-### MCP troubleshooting
+### MCP "Failed to reconnect / ENOENT"
 
-If `claude mcp list` shows **`case-sdk: ... ✗ Failed to connect`**, the most
-common cause is the `mcp` package missing from the venv you installed
-case-sdk into. Verify and fix:
-
-```bash
-/path/to/your/venv/bin/pip show mcp
-/path/to/your/venv/bin/pip install "mcp[cli]>=1.0"
-claude mcp remove case-sdk
-claude mcp add case-sdk -- /path/to/your/venv/bin/python -m case_mcp.server
-```
-
-A quick import probe that crashes loudly when `mcp` is missing:
-
-```bash
-python -c "from case_mcp.server import create_mcp; create_mcp(); print('ok')"
-```
+Make sure `case-mcp` is on the venv path used by your MCP client. Re-register with the absolute path: `claude mcp add case-sdk -- /full/path/to/.venv/bin/case-mcp`.
 
 ## Error handling
 
@@ -275,6 +269,12 @@ def procedure(params):
 ```
 
 `ClientError` represents a recoverable harness failure (timeout, primitive raised). Uncaught exceptions and re-raised `ClientError`s surface to the caller of `Runtime.execute*` as `ProcedureError`.
+
+## Troubleshooting
+
+### `SSL: CERTIFICATE_VERIFY_FAILED`
+
+case-sdk bundles certifi for `wss://` connections. If it still fires, `pip install -U case-sdk certifi` and verify your Python is built against a working OpenSSL.
 
 ## Security model
 

@@ -1,25 +1,10 @@
 """Local procedure discovery — resolve names to .py or .json files.
 
-Search order (first match wins):
-
-1. Paths from ``CASE_SDK_PROCEDURES_PATH`` (colon-separated directories)
-2. ``~/.case/procedures``
-3. ``~/.case-sdk/procedures``
-4. Packaged ``case_sdk/builtin_procedures/``
-
-Procedure names use forward slashes for nesting, e.g.
-``davinci/append_to_timeline`` → ``.../davinci/append_to_timeline.json``.
-
-Symlinks inside a search root are followed as long as the resolved target
-stays under the same root. Symlinks whose target escapes the root (e.g.
-``~/.case/procedures/evil -> /etc/passwd``) are skipped with a warning so
-a misplaced symlink can't smuggle arbitrary files into the catalog.
-
-If a user-dir procedure shares the same qualified name as a shipped
-built-in (e.g. ``~/.case/procedures/davinci/foo.json`` and
-``case_sdk/builtin_procedures/davinci/foo.json``), the user file still
-wins (first-match semantics) but a ``RuntimeWarning`` is emitted so an
-accidental shadow does not go unnoticed.
+Search order (first match wins): ``CASE_SDK_PROCEDURES_PATH``,
+``~/.case/procedures``, ``~/.case-sdk/procedures``, packaged
+``case_sdk/builtin_procedures/``. Procedure names use forward slashes for
+nesting (e.g. ``davinci/append_to_timeline``). Symlinks whose target
+escapes the search root are skipped with a warning.
 """
 
 from __future__ import annotations
@@ -172,11 +157,29 @@ def list_procedures() -> list[dict[str, Any]]:
     return sorted(entries, key=lambda e: e["name"])
 
 
-def resolve_procedure(name: str) -> Path:
-    """Resolve a procedure name or filesystem path."""
+def resolve_procedure(name: str, allow_arbitrary: bool = False) -> Path:
+    """Resolve a procedure name or filesystem path.
+
+    When ``allow_arbitrary`` is False (default), a direct filesystem path is
+    only honoured if it resolves inside one of the configured search roots.
+    Outside-root paths raise :class:`ProcedureNotFound` so a malicious caller
+    can't aim ``execute_file`` at arbitrary ``.py`` files on disk.
+    """
     candidate = Path(name).expanduser()
     if candidate.is_file():
-        return candidate.resolve()
+        resolved = candidate.resolve()
+        if allow_arbitrary:
+            return resolved
+        for root in search_paths():
+            try:
+                resolved.relative_to(root)
+            except ValueError:
+                continue
+            return resolved
+        raise ProcedureNotFound(
+            f"refusing to run procedure file outside search roots "
+            f"(use --allow-arbitrary-py to override): {candidate}"
+        )
 
     key = name.replace("\\", "/").strip("/")
     if key.endswith((".json", ".py")):

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "case-sdk"
-version = "0.1.2"
+version = "0.1.3"
 description = "Runtime for desktop GUI automation on macOS. Run procedures locally, or stream them from a remote WebSocket server."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -33,23 +33,20 @@ classifiers = [
     "Topic :: System :: Operating System Kernels",
 ]
 dependencies = [
-    "websockets>=12.0",
-    # pydantic floor lifted from 2.0 -> 2.4 to close CVE-2024-3772 (ReDoS in
-    # the email validator pre-2.4).
+    "websockets>=13.1",
+    # Bundled CA bundle for wss:// TLS — sidesteps broken trust stores on python.org / pyenv builds.
+    "certifi>=2024.0",
+    # floor lifted for stability; email-validator is the actual CVE-2024-3772 dep if you opt into pydantic[email]
     "pydantic>=2.4",
-    # macOS-only deps gated by sys_platform so non-mac consumers (case-api on
-    # linux Cloud Run, CI containers) can install case-sdk for its protocol +
-    # steps modules without pulling in the GUI stack. On macOS this resolves
-    # exactly as before. atomacos 3.3.0 pins pyautogui<0.9.42; we only use
-    # stable primitives that have been in pyautogui since 0.9.36.
+    # macOS-only GUI deps; atomacos 3.3.0 pins pyautogui<0.9.42 and we only use primitives stable since 0.9.36.
     'pyautogui<0.9.42; sys_platform == "darwin"',
     'atomacos>=3.3.0; sys_platform == "darwin"',
-    # Pillow is transitive via pyautogui/pyscreeze. Pinning the floor here so
-    # macOS installs pick up CVE-2024-28219 (buffer overflow <10.3.0) and
-    # CVE-2025-48379 (heap overflow <11.3.0) fixes regardless of how pip
-    # resolves the transitive graph.
-    'Pillow>=11.3; sys_platform == "darwin"',
+    # Floor unconditional so Linux consumers don't pick up older vulnerable Pillow via transitive resolution (CVE-2024-28219, CVE-2025-48379).
+    "Pillow>=11.3",
 ]
+
+[project.urls]
+Homepage = "https://daemonlabs.run"
 
 [project.optional-dependencies]
 mcp = [

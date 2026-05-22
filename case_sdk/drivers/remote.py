@@ -1,20 +1,8 @@
-"""RemoteDriver — streams a procedure from a remote server over WebSocket.
+"""Stream a remote procedure via WebSocket.
 
-Procedure source lives on the server, never on the client's disk. The
-client opens a WS, says hello with a procedure name, and the server walks
-its own copy of the generator. Each yield becomes an `action` (or
-`sensor`) envelope; the client runs it through its local harness and
-replies with a `result` envelope carrying the observation.
-
-The driver is intentionally chatty rather than smart — almost all
-intelligence lives on the server. The client's job is:
-  - dispatch incoming actions/sensors to the harness,
-  - answer pings,
-  - surface errors,
-  - reconnect on transport hiccups with a fresh session,
-  - cache `step_id → result` so a replay never double-clicks.
-
-See also: case_sdk/drivers/local.py for the in-process equivalent.
+The local harness executes one step at a time; the procedure body never
+crosses the wire. See ``case_sdk/drivers/local.py`` for the in-process
+equivalent.
 """
 
 from __future__ import annotations
@@ -22,8 +10,10 @@ from __future__ import annotations
 import asyncio
 import os
 import random
+import ssl
 from typing import Any, Callable
 
+import certifi
 from websockets.asyncio.client import connect as ws_connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus, WebSocketException
 
@@ -48,6 +38,21 @@ DEFAULT_MAX_RECONNECTS = int(os.environ.get("CASE_SDK_MAX_RECONNECTS", "5"))
 RECONNECT_BACKOFF = (1.0, 2.0, 4.0, 8.0, 30.0)
 
 
+def _ssl_context_for(url: str) -> ssl.SSLContext | None:
+    """SSLContext rooted at certifi's CA bundle for wss:// URLs.
+
+    macOS Python installers from python.org and several pyenv builds ship
+    without a wired-up trust store, so the stdlib default ssl context can
+    fail to verify Cloud Run / Let's Encrypt chains. Using certifi removes
+    that dependency on the user's environment.
+
+    Returns None for ws:// (no TLS) so local dev keeps working unchanged.
+    """
+    if not url.startswith("wss://"):
+        return None
+    return ssl.create_default_context(cafile=certifi.where())
+
+
 class RemoteDriver(Driver):
     """Drives a procedure that lives on a remote server.
 
@@ -66,7 +71,7 @@ class RemoteDriver(Driver):
     def __init__(
         self,
         harness: Harness,
-        api_base: str = "ws://localhost:8000",
+        api_base: str = "wss://api.daemonlabs.run",
         api_key: str = "",
         *,
         step_timeout: float = DEFAULT_STEP_TIMEOUT,
@@ -83,10 +88,6 @@ class RemoteDriver(Driver):
         self.reconnect_backoff = reconnect_backoff
 
     # ---- Driver ABC ----------------------------------------------------
-    # In the local driver `generator_fn` is the procedure callable. Here
-    # we use the same slot for the *procedure name* (str) since the
-    # procedure source lives server-side. This matches the Runtime API:
-    #   rt.execute("save_textedit") → RemoteDriver.execute("save_textedit", {})
     def execute(
         self,
         generator_fn: Callable[[dict[str, Any]], Any] | str,
@@ -106,16 +107,14 @@ class RemoteDriver(Driver):
         params: dict[str, Any],
     ) -> dict[str, Any]:
         attempt = 0
-        last_error: Exception | None = None
 
         while True:
             # Each attempt is a fresh session — old session_id is dead.
             # The server-side generator does not resume; the procedure
-            # restarts from step 0. This matches the plan's P10 design.
+            # restarts from step 0.
             try:
                 return await self._run_one_session(procedure_name, params)
             except _ReconnectableError as e:
-                last_error = e.cause
                 if attempt >= self.max_reconnects:
                     raise ProcedureError(
                         f"transport gave up after {attempt + 1} attempts: {e.cause}",
@@ -165,6 +164,7 @@ class RemoteDriver(Driver):
                 ping_interval=None,
                 open_timeout=10,
                 max_size=1_000_000,
+                ssl=_ssl_context_for(url),
             )
         except Exception as e:  # constructor itself rarely raises
             raise _ReconnectableError(e) from e
@@ -191,13 +191,8 @@ class RemoteDriver(Driver):
                     env = Envelope.from_json(raw)
 
                     if env.type == "done":
-                        # Unwrap the done envelope so callers see the
-                        # same shape LocalDriver returns: the procedure's
-                        # literal return value. The success/reason
-                        # metadata in the envelope is a server signal —
-                        # if the server says success=False with no
-                        # `result`, we still emit at least
-                        # {"success": False} so callers can branch.
+                        # Unwrap so callers see the same shape LocalDriver returns;
+                        # fall back to {"success": ...} if the server omitted `result`.
                         result = env.payload.get("result")
                         if isinstance(result, dict) and result:
                             return result
@@ -218,11 +213,9 @@ class RemoteDriver(Driver):
                     if env.type in ("action", "sensor", "verify"):
                         cached = step_cache.get(env.step_id)
                         if cached is not None:
-                            # P11: replay of a step we've already
-                            # executed. Return the cached observation
-                            # rather than calling the harness again — a
-                            # WS hiccup that produced a duplicate frame
-                            # must never produce a double-click.
+                            # Replay of a step we've already executed: return
+                            # the cached observation so a WS hiccup that
+                            # produced a duplicate frame never double-clicks.
                             await ws.send(
                                 result_msg(
                                     ok=cached["ok"],

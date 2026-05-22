@@ -1,4 +1,4 @@
-"""case-mcp — thin MCP adapter over case-sdk (Phase 4).
+"""case-mcp — thin MCP adapter over case-sdk.
 
 All automation logic lives in ``case_sdk`` (harness, inspect, verify, discovery).
 This module only exposes tools agents can call over MCP stdio.
@@ -12,9 +12,17 @@ Requires macOS Accessibility (and Screen Recording if procedures use screenshot)
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import sys
+import tomllib
+import urllib.error
+import urllib.request
+from pathlib import Path
 from typing import Any
+
+CONFIG_FILE = Path.home() / ".case-sdk" / "config.toml"
 
 # MCP uses stdout for JSON-RPC; log to stderr only.
 logging.basicConfig(
@@ -28,60 +36,60 @@ INSTRUCTIONS = """\
 You control macOS desktop apps through case-sdk via these MCP tools.
 
 DEFAULT BIAS: ACT on clear action verbs (open, click, type, import, run, append).
-Use tools below — do not invent shell commands for GUI work unless the user
-asks for terminal-only tasks.
+Use the tools below — do not invent shell commands for GUI work.
 
 WORKFLOW
 1. case_doctor() — optional preflight (permissions + procedure dirs).
-2. case_list_procedures() — discover built-in and user procedure names.
-3. For UI you cannot describe: case_ax_tree() or case_find_elements() to
-   obtain element_ref dicts for JSON procedures (ax_press / ax_set_value).
-4. case_focus_app() before any run that drives a specific app (keystrokes go
-   to the frontmost app).
-5. case_run(procedure, params) — executes a .json or .py procedure locally.
+2. case_list_procedures() — discover built-in (e.g. ``davinci/*``) and user
+   procedure names.
+3. case_focus_app(name) before any run that drives a specific app
+   (keystrokes go to the frontmost app).
+4. case_run(procedure, params) — execute a procedure locally; falls through
+   to the server when the procedure isn't on disk and an api_key is set.
 
-PROCEDURES
-- Names look like ``davinci/import_and_append`` (built-ins ship with the SDK).
-- User overrides live in ``~/.case/procedures/`` (first match wins).
-- Pass params as a dict, e.g. {"filepath": "/abs/path/clip.mov"} — clip_basename
-  is auto-derived from filepath when needed.
-- JSON procedures support verify steps (Project.db for DaVinci). Default verify
-  mode is soft (warn on stderr). Use verify_mode="hard" to fail closed.
-
-USER-ACTION-REQUIRED PROCEDURES
-- Some procedures declare ``requires_user_action: true`` in their JSON.
-  case_list_procedures surfaces this flag plus ``user_action_prompt``.
-- Before calling case_run on such a procedure: show the user the prompt,
-  wait for them to do the action in the target app, then call case_run
-  with ``user_action_confirmed=true``.
-- If you forget, case_run returns ``{success: false, code:
-  "E_USER_ACTION_REQUIRED", prompt: "..."}`` — relay the prompt to the
-  user and retry with the flag set.
-
-BUILT-IN DAVINCI PROCEDURES (require Resolve open + timeline on Edit page)
-- davinci/focus_resolve — activate DaVinci
-- davinci/import_media — one file (filepath)
-- davinci/append_to_timeline — append selected pool clip (menu + DB verify)
-- davinci/append_to_timeline_hotkey — Fn+F9 fallback if menus fail
-- davinci/import_and_append — import then append
-
-AX AUTHORING
-- case_ax_tree(app) — dump hierarchy (bounded). Use frontmost=True if unsure.
-- case_find_elements(app, role=, title_contains=) — returns element_ref candidates.
-
-REMOTE MODE
-- case_run only executes *local* discovered procedures and file paths.
-- Streaming remote procedures use the case-sdk CLI with an API key;
-  not exposed here yet.
+If a procedure declares ``requires_user_action`` in its JSON, case_run
+returns ``code: "E_USER_ACTION_REQUIRED"`` until you re-call with
+``user_action_confirmed=true`` after the user has done the manual step.
 
 Call case_help() for the tool catalog and this guide as structured JSON.
 """
 
 
-def _runtime(*, verify_mode: str | None = None) -> Any:
+def _load_remote_config() -> dict[str, str]:
+    """Read api_key + api_base from ~/.case-sdk/config.toml + env vars."""
+    cfg: dict[str, Any] = {}
+    if CONFIG_FILE.exists():
+        with CONFIG_FILE.open("rb") as f:
+            cfg = tomllib.load(f).get("default", {})
+    api_key = os.environ.get("CASE_SDK_API_KEY") or cfg.get("api_key", "")
+    api_base = os.environ.get("CASE_SDK_API_BASE") or cfg.get(
+        "api_base", "wss://api.daemonlabs.run"
+    )
+    return {"api_key": api_key, "api_base": api_base}
+
+
+def _http_base(ws_base: str) -> str:
+    """Convert wss://… → https://…, ws://… → http://… for HTTP endpoints."""
+    if ws_base.startswith("wss://"):
+        return "https://" + ws_base[len("wss://") :]
+    if ws_base.startswith("ws://"):
+        return "http://" + ws_base[len("ws://") :]
+    return ws_base
+
+
+def _runtime(*, verify_mode: str | None = None, remote: bool = False) -> Any:
+    """Build a Runtime. `remote=True` wires the api_key + api_base from config
+    so rt.execute() can dispatch to the WS server when a procedure isn't local."""
     from case_sdk import Runtime
 
-    return Runtime(verify_mode=verify_mode)  # type: ignore[arg-type]
+    if not remote:
+        return Runtime(verify_mode=verify_mode)  # type: ignore[arg-type]
+    cfg = _load_remote_config()
+    return Runtime(
+        api_key=cfg["api_key"],
+        api_base=cfg["api_base"],
+        verify_mode=verify_mode,
+    )  # type: ignore[arg-type]
 
 
 def create_mcp():
@@ -224,6 +232,51 @@ def create_mcp():
         return {"success": True, "count": len(entries), "procedures": entries}
 
     @mcp.tool()
+    def case_list_remote_procedures() -> dict[str, Any]:
+        """Fetch the server's procedure catalog over HTTP (/v1/procedures).
+
+        Requires api_key + api_base in ~/.case-sdk/config.toml or env vars.
+        Returns name, version, description, and the requires_user_action flag.
+        Catalogs procedures available only on the server (e.g. davinci/color/*)
+        that aren't bundled with the local SDK install.
+        """
+        cfg = _load_remote_config()
+        if not cfg["api_key"]:
+            return {
+                "success": False,
+                "error": "no api_key configured — run `case-sdk init --key …`",
+                "procedures": [],
+            }
+        url = _http_base(cfg["api_base"]).rstrip("/") + "/v1/procedures"
+        req = urllib.request.Request(
+            url, headers={"Authorization": f"Bearer {cfg['api_key']}"}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            return {
+                "success": False,
+                "error": f"HTTP {e.code}: {e.reason}",
+                "url": url,
+                "procedures": [],
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"{type(e).__name__}: {e}",
+                "url": url,
+                "procedures": [],
+            }
+        procs = data.get("procedures", []) if isinstance(data, dict) else []
+        return {
+            "success": True,
+            "count": len(procs),
+            "procedures": procs,
+            "source": url,
+        }
+
+    @mcp.tool()
     def case_list_verifiers() -> dict[str, Any]:
         """List verify step names usable inside JSON procedures."""
         from case_sdk.verify import list_verifiers
@@ -268,13 +321,50 @@ def create_mcp():
 
         try:
             resolved = resolve_procedure(procedure)
-        except ProcedureNotFound as e:
-            return {
-                "success": False,
-                "procedure": procedure,
-                "error": str(e),
-                "code": "E_NOT_FOUND",
-            }
+        except ProcedureNotFound:
+            # Fall through to remote dispatch if an API key is configured.
+            # The full procedure body never leaves the server — only one step
+            # at a time streams over WS for the client harness to execute.
+            cfg = _load_remote_config()
+            if not cfg["api_key"]:
+                return {
+                    "success": False,
+                    "procedure": procedure,
+                    "error": (
+                        f"procedure {procedure!r} not found locally and no "
+                        "api_key configured for remote dispatch"
+                    ),
+                    "code": "E_NOT_FOUND",
+                }
+            rt_remote = _runtime(verify_mode=mode, remote=True)
+            try:
+                result = rt_remote.execute(procedure, **run_params)
+                return {
+                    "success": True,
+                    "procedure": procedure,
+                    "params": run_params,
+                    "result": result,
+                    "mode": "remote",
+                }
+            except (ClientError, ProcedureError) as e:
+                return {
+                    "success": False,
+                    "procedure": procedure,
+                    "params": run_params,
+                    "error": str(e),
+                    "code": getattr(e, "code", "E_PROCEDURE"),
+                    "mode": "remote",
+                }
+            except Exception as e:
+                log.exception("case_run remote dispatch failed")
+                return {
+                    "success": False,
+                    "procedure": procedure,
+                    "params": run_params,
+                    "error": f"{type(e).__name__}: {e}",
+                    "code": "E_RUNTIME",
+                    "mode": "remote",
+                }
 
         meta = read_procedure_metadata(resolved)
         if meta.get("requires_user_action") and not user_action_confirmed:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from pathlib import Path
 from typing import Any
 
@@ -25,19 +24,6 @@ _SNAPSHOT_FIELDS = frozenset(
 
 
 def _resolve_db_path(args: dict[str, Any], ctx: VerifyContext) -> Path | None:
-    if args.get("db_path"):
-        # Caller-supplied db_path lets a procedure read any SQLite file on
-        # disk via the davinci verifiers. Deprecated for v0.1.1 and slated
-        # for removal in v0.2.0 — use ``project_hint`` or let the heuristic
-        # auto-detect the active Project.db.
-        warnings.warn(
-            "case-sdk: passing 'db_path' to davinci verify steps is "
-            "deprecated and will be removed in v0.2.0. Use 'project_hint' "
-            "or omit it to auto-detect the active Project.db.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return Path(args["db_path"])
     hint = args.get("project_hint")
     if hint:
         return davinci_db.pick_active_db(str(hint))
@@ -227,10 +213,4 @@ def verify_timeline_clips(args: dict[str, Any], ctx: VerifyContext) -> dict[str,
     }
 
 
-# Import registers handlers on load.
-_ = (
-    verify_db_snapshot,
-    verify_db_delta,
-    verify_media_pool_name,
-    verify_timeline_clips,
-)
+# Handlers register at def-time via the @register decorator.

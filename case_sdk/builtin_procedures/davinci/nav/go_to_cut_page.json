@@ -1,0 +1,10 @@
+{
+  "description": "Switch DaVinci Resolve to the Cut page (Shift+3).",
+  "verify_mode": "soft",
+  "steps": [
+    {"action": "activate_app", "name": "DaVinci Resolve", "settle_ms": 500},
+    {"action": "hotkey", "combo": ["shift", "3"]},
+    {"action": "wait", "ms": 600}
+  ],
+  "return": {"success": true, "page": "cut"}
+}

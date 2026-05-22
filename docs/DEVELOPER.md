@@ -15,7 +15,7 @@ Agent / human
     └── case-mcp (stdio)      ──┼──► case_sdk.Runtime
                                   │         │
                                   │         ├── LocalDriver → Harness (actions/sensors)
-                                  │         └── RemoteDriver → remote server (BYO)
+                                  │         └── RemoteDriver → wss://api.daemonlabs.run
                                   │
                                   ├── inspect (AX tree, element_ref)
                                   ├── steps (JSON procedures)
@@ -207,7 +207,7 @@ case-sdk procedures
 case-sdk run davinci/import_and_append --param filepath=/abs/path/clip.mov
 ```
 
-Shipped built-ins include `davinci/go_to_page`, `davinci/open_media_pool`, `davinci/import_media_on_edit`, `davinci/import_media`, `davinci/append_to_timeline`, `davinci/import_and_append`, and others (see `case-sdk procedures`).
+Shipped built-ins include `davinci/nav/go_to_<page>_page` (media, cut, edit, fusion, color, fairlight, deliver), `davinci/open_media_pool`, `davinci/import_media_on_edit`, `davinci/import_media`, `davinci/append_to_timeline`, `davinci/import_and_append`, and others (see `case-sdk procedures`).
 
 ---
 
@@ -283,6 +283,20 @@ DaVinci / Project.db verifiers: `davinci.db_snapshot`, `davinci.db_delta`, `davi
 
 - **soft** — log warning, continue (default; good for unsaved Resolve projects).
 - **hard** — `ClientError` code `E_VERIFY`.
+
+---
+
+## Remote mode — case-api
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `https://api.daemonlabs.run/health` | none | health probe |
+| `https://api.daemonlabs.run/v1/procedures` | Bearer | list procedures available for your key |
+| `wss://api.daemonlabs.run/ws` | Bearer | procedure execution stream |
+
+case-api is live: `https://api.daemonlabs.run` (HTTPS) and `wss://api.daemonlabs.run/ws` (WebSocket). Get a key from https://daemonlabs.run/pricing, export it as `CASE_API_KEY`, the runtime handles the rest.
+
+The wire protocol is open. If you want to run your own backend, `tests/mock_server.py` is the ~250-line reference. Anything built against case-sdk works against either.
 
 ---
 

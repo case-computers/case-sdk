@@ -29,8 +29,6 @@ You need:
   JSON that reproduces.
 - **Feature requests:** describe the use case before the proposed API.
   We're conservative about adding new primitives to the harness.
-- **Security issues:** see `SECURITY.md` — do not file public issues
-  for suspected vulnerabilities.
 
 ## Pull requests
 

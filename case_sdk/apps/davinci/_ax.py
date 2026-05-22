@@ -18,8 +18,17 @@ from __future__ import annotations
 import time
 from typing import Any
 
-import ApplicationServices as AX  # PyObjC bindings — macOS only
-import Cocoa  # for NSWorkspace running-apps lookup
+# PyObjC modules are macOS-only. We delay the imports to runtime (inside the
+# helper functions) so the module is importable on linux — the actions that
+# actually use AX are gated by the parent ``__init__.py``'s try/except, but
+# downstream `from case_sdk.apps.davinci import _ax` calls (test mocks, etc.)
+# would still crash at module load on linux without this lazy boundary.
+try:  # pragma: no cover — macOS-only
+    import ApplicationServices as AX
+    import Cocoa
+except ImportError:  # pragma: no cover — non-macOS path
+    AX = None  # type: ignore[assignment]
+    Cocoa = None  # type: ignore[assignment]
 
 _RESOLVE_APP_NAME_NEEDLE = "davinci resolve"
 
