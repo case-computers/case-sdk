@@ -1,0 +1,10 @@
+{
+  "description": "Switch DaVinci Resolve to the Color page (Shift+6).",
+  "verify_mode": "soft",
+  "steps": [
+    {"action": "activate_app", "name": "DaVinci Resolve", "settle_ms": 500},
+    {"action": "hotkey", "combo": ["shift", "6"]},
+    {"action": "wait", "ms": 600}
+  ],
+  "return": {"success": true, "page": "color"}
+}

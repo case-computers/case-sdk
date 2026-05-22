@@ -110,10 +110,6 @@ def resolve_element_ref(element_ref: dict[str, Any] | str | None) -> Any:
     """
     if not isinstance(element_ref, dict):
         return None
-    try:
-        import atomacos  # noqa: WPS433
-    except Exception:
-        return None
 
     app_name = element_ref.get("app")
     path = element_ref.get("path")

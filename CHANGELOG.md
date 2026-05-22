@@ -2,9 +2,26 @@
 
 All notable changes to `case-sdk` are documented here.
 
-The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows semantic versioning once it hits 1.0.
+## [0.1.3]
 
-## [Unreleased]
+### Added
+
+- `case_mcp` falls through to remote dispatch when `case_run` is called with a procedure not found locally; only one step at a time streams over WS, full body stays on the server.
+- New MCP tool `case_list_remote_procedures` hits the server's `/v1/procedures` HTTP catalog (requires `api_key` + `api_base` in config or env).
+- `RemoteDriver` now configures its own `SSLContext` rooted at bundled `certifi` for `wss://` URLs; removes reliance on the system trust store (fixes `[SSL: CERTIFICATE_VERIFY_FAILED]` on python.org / pyenv builds). `ws://` unchanged.
+
+### Changed (BREAKING)
+
+- Removed bundled `davinci/go_to_page.json` (its `click_ref(AXCheckBox)` selector no longer resolves on current Resolve). Replaced by 7 hotkey-based procedures under `davinci/nav/`: `go_to_{media,cut,edit,fusion,color,fairlight,deliver}_page`, each firing `Shift+N` (N=2..8). Names match the case-api server seeds.
+- Default `api_base` is now `wss://api.daemonlabs.run` (was `ws://localhost:8000`). Affects `Runtime`, `RemoteDriver`, the CLI, and `case_mcp`. Mock-server users: set `CASE_SDK_API_BASE=ws://localhost:8000` or pass `--api ws://localhost:8000`.
+
+### Fixed
+
+- macOS-only deps (`pyautogui`, `atomacos`, `Pillow`) now gated by `sys_platform == "darwin"` so the package installs cleanly on Linux (Cloud Run, CI).
+
+### Security
+
+- `pydantic` floor lifted to `>=2.4` and `Pillow` floor to `>=11.3` (closes CVE-2024-3772, CVE-2024-28219, CVE-2025-48379).
 
 ## [0.1.2]
 
@@ -26,6 +43,20 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
   client mid-procedure.
 
 ## [0.1.1]
+
+### Added
+
+- **User-action-required procedures.** JSON procedures may declare
+  `requires_user_action: true` plus `user_action_prompt` to signal that the
+  user needs to do something in the target app first (e.g. select a clip).
+  `case-sdk run` shows the prompt and waits for Enter; pass `--yes` to skip
+  in scripts. `case_mcp` surfaces the fields via `case_list_procedures`; the
+  MCP `case_run` tool refuses to execute such procedures unless the agent
+  passes `user_action_confirmed=true`, returning the structured error
+  `{success: false, code: "E_USER_ACTION_REQUIRED", prompt: "..."}`.
+- Built-in `davinci/append_to_timeline` and `davinci/append_to_timeline_hotkey`
+  now declare `requires_user_action: true` so agents and the CLI ask the
+  user to select a pool clip before firing the append.
 
 ### Fixed
 
@@ -64,19 +95,6 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 - New "Security model" section describing the trust boundary
   case-sdk exposes (procedures run as the installing user with
   Accessibility; remote servers receive unconditional trust).
-
-
-- **User-action-required procedures.** JSON procedures may declare
-  `requires_user_action: true` plus `user_action_prompt` to signal that the
-  user needs to do something in the target app first (e.g. select a clip).
-  `case-sdk run` shows the prompt and waits for Enter; pass `--yes` to skip
-  in scripts. `case_mcp` surfaces the fields via `case_list_procedures`; the
-  MCP `case_run` tool refuses to execute such procedures unless the agent
-  passes `user_action_confirmed=true`, returning the structured error
-  `{success: false, code: "E_USER_ACTION_REQUIRED", prompt: "..."}`.
-- Built-in `davinci/append_to_timeline` and `davinci/append_to_timeline_hotkey`
-  now declare `requires_user_action: true` so agents and the CLI ask the
-  user to select a pool clip before firing the append.
 
 ## [0.1.0]
 

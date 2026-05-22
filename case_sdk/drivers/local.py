@@ -1,20 +1,10 @@
-"""LocalDriver — runs a procedure generator in-process against a local harness.
+"""Run a procedure generator in-process against a local harness.
 
-Mode A path: no server, no network, no API key. The procedure file lives on the
-user's disk; the driver imports it and walks it yield-by-yield.
-
-Error boundary (P9):
-    If a harness call fails, we surface the failure *into* the generator
-    via ``gen.throw(ClientError(...))`` so the procedure can
-    ``try/except ClientError`` and retry. Anything the procedure does not
-    catch (or any other exception class it raises) is re-thrown to the
-    caller as ``ProcedureError`` — the procedure is dead and the session
-    is over.
-
-    Per-step timeout: each harness call runs on a worker thread bounded
-    by ``step_timeout`` seconds. Exceeding it → ``ClientError("E_TIMEOUT")``.
-
-The same shape applies to RemoteDriver — see drivers/remote.py.
+Harness failures surface into the generator via ``gen.throw(ClientError(...))``
+so procedures can ``try/except`` and retry; anything uncaught becomes a
+``ProcedureError`` to the caller. Each harness call runs on a worker thread
+bounded by ``step_timeout`` (default 30s). The same shape applies to
+``RemoteDriver`` — see ``drivers/remote.py``.
 """
 
 from __future__ import annotations

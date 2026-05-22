@@ -1,20 +1,9 @@
 """macOS permissions detection + onboarding banner.
 
-case-sdk needs three permissions on macOS:
-
-  - Accessibility — to control mouse / keyboard / read the AX tree.
-  - Screen Recording — to capture window state for sensors.
-  - Input Monitoring — required by some keystroke paths on modern macOS.
-
-We detect Accessibility precisely via ``AXIsProcessTrusted`` and Screen
-Recording heuristically by grabbing a 1x1 pixel and checking whether macOS
-substituted black pixels (which is what happens when the perm is denied).
-Input Monitoring has no reliable Python probe, so we return ``None`` and let
-the CLI's ``doctor`` command surface it as "Unknown — grant manually."
-
-The module is import-light and tolerant of missing native deps so that even
-on a broken Python install ``ensure_perms()`` degrades to "missing" rather
-than crashing with an opaque ImportError.
+Accessibility is checked via ``AXIsProcessTrusted``; Screen Recording is
+inferred from a 1x1 screenshot (macOS swaps in black pixels when denied);
+Input Monitoring has no reliable probe and is reported as undetectable.
+Missing native deps degrade to "missing" rather than crashing.
 """
 
 from __future__ import annotations

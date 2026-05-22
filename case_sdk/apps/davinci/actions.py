@@ -21,6 +21,7 @@ from typing import Any
 
 from case_sdk.apps.davinci import _ax
 from case_sdk.harness.executor import Harness
+from case_sdk.harness.gui import _clamp_coords as _clamp
 
 # Module-level pyautogui binding so tests can patch
 # ``case_sdk.apps.davinci.actions.pyautogui``. On linux the import fails and
@@ -303,20 +304,6 @@ def register(h: Harness) -> None:
 
 
 # ---- small utilities (kept private to this module) ---------------------
-
-
-def _screen_size() -> tuple[int, int]:
-    try:
-        size = pyautogui.size()
-        return int(size.width), int(size.height)
-    except Exception:
-        return 1920, 1080
-
-
-def _clamp(x: int, y: int) -> tuple[int, int]:
-    """Pull (x, y) into safe display bounds — pyautogui FAILSAFE is at (0, 0)."""
-    w, h = _screen_size()
-    return max(1, min(int(x), w - 1)), max(1, min(int(y), h - 1))
 
 
 def _cmd_key() -> str:

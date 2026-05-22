@@ -1,15 +1,8 @@
-"""Wire protocol for case-sdk.
+"""Wire envelope shared by LocalDriver and RemoteDriver.
 
-Defines the on-wire envelope shared by both LocalDriver (in-process) and
-RemoteDriver (WebSocket) so a procedure runs identically in either mode.
-
-The envelope is intentionally minimal: a type tag, a payload dict, a protocol
-version, a session id and a per-step counter. Each message type's payload shape
-is documented next to its builder function.
-
-Two public classes — Action and Sensor — are what procedures yield. The driver
-turns those yields into envelopes and the driver's harness counterpart turns
-envelopes back into pyautogui / AX calls.
+See ``Envelope.from_json`` for the schema; each message type's payload
+shape is documented on its builder below. Procedures yield ``Action`` /
+``Sensor`` / ``Verify`` instances which the driver turns into envelopes.
 """
 
 from __future__ import annotations
@@ -239,14 +232,6 @@ def pong_msg(session_id: str = "") -> Envelope:
 
 
 # ---- Exception types ----------------------------------------------------
-# `ClientError` represents a *recoverable* failure that originated on the
-# client side (e.g. a harness primitive raised, or a per-step timeout
-# fired). Procedures may catch it with `try/except ClientError` and retry
-# or fall back to a different strategy. In Mode B, the server-side
-# procedure is what does the catching.
-#
-# `ProcedureError` represents a *fatal* failure that the procedure either
-# did not catch or chose to surface. It terminates the execute() call.
 
 
 class ClientError(Exception):

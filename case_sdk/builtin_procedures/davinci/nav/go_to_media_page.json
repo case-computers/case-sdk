@@ -1,0 +1,10 @@
+{
+  "description": "Switch DaVinci Resolve to the Media page (Shift+2).",
+  "verify_mode": "soft",
+  "steps": [
+    {"action": "activate_app", "name": "DaVinci Resolve", "settle_ms": 500},
+    {"action": "hotkey", "combo": ["shift", "2"]},
+    {"action": "wait", "ms": 600}
+  ],
+  "return": {"success": true, "page": "media"}
+}
